@@ -1,39 +1,25 @@
-# Firebase
-/google-services.json
-/GoogleService-Info.plist
-/firebase.json
-
-# Environment variables
+# Local env
 .env
-.env.*
-config.dart
+.env.secrets
 
-# Keys & Secrets
-*.key
-*.p12
-*.pem
-*.crt
+# Node / build
+node_modules/
+dist/
+build/
 
-# Android
-/android/key.properties
-/android/app/debug.keystore
-/android/app/prod.keystore
-
-# iOS
-/ios/Runner/GoogleService-Info.plist
-/ios/Runner/Release.keystore
-
-# Build files
-/build/
-/.dart_tool/
-
-# IDE
-.vscode/
-.idea/
-
-# OS
+# OS files
 .DS_Store
 Thumbs.db
 
-# Logs
+# Editor
+.vscode/
+.idea/
 *.log
+
+# Keys and certificates
+*.pem
+*.key
+*.crt
+
+# Other
+coverage/
