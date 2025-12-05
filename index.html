@@ -314,14 +314,25 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js" defer></script>
 
-    <!-- QR Code Library -->
-    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js" defer></script>
+    <!-- QR Code Library (switched to unpkg - fallback if CDN has MIME issues) -->
+    <script src="https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js" defer></script>
 
     <!-- Firebase (Required for authentication) -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js" defer></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js" defer></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js" defer></script>
-
+    <script>
+        (function(){
+            if (typeof window !== 'undefined') {
+                if (!window.__INJECTED_ENV__ && !window.CONFIG) {
+                    console.warn('NearCheck: No client configuration detected.\n' +
+                        'Create a local `config.js` that sets `window.__INJECTED_ENV__` with your values,\n' +
+                        'or inject configuration at build-time (preferred for production).\n' +
+                        'See `API_SOURCES.md` and `DEPLOYMENT.md` for instructions.');
+                }
+            }
+        })();
+    </script>
     <script src="config-loader.js" defer></script>
     <script src="security.js" defer></script>
     <script src="voice-commands.js" defer></script>
