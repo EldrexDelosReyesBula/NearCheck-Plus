@@ -1,3681 +1,5535 @@
-        // Firebase Configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyCVP8zaUj2iDrooLbRQNypHqB8QNTLhGDE",
-            authDomain: "attendance-fe1c8.firebaseapp.com",
-            projectId: "attendance-fe1c8",
-            storageBucket: "attendance-fe1c8.firebasestorage.app",
-            messagingSenderId: "903463376704",
-            appId: "1:903463376704:web:d004c563d56aa286df8ca5",
-            measurementId: "G-YY5GQZPSRK"
-        };
-
-        // Initialize Firebase
-        firebase.initializeApp(firebaseConfig);
+  // Initialize Firebase
+        try {
+            firebase.initializeApp(firebaseConfig);
+        } catch (error) {
+            console.error('Firebase initialization error:', error);
+        }
+        
         const auth = firebase.auth();
         const db = firebase.firestore();
 
         // Application State
-        const state = {
+        const appState = {
             currentUser: null,
-            userRole: null,
-            userData: null,
-            sections: [],
-            students: [],
-            attendance: [],
             currentPage: 'dashboard',
-            darkMode: false,
-            sidebarOpen: false,
-            currentLocation: null,
-            selectedSection: null,
-            nearId: null,
-            locationPermission: null,
-            autoCheckinEnabled: true,
-            bleDevices: [],
-            autoCheckinTimer: null,
-            autoCheckinCountdown: 5,
-            currentAutoCheckinSection: null,
-            locationWatchId: null,
-            pendingInvitation: null,
-            sectionUpdates: {},
-            activeSessions: {},
-            sessionTimers: {}
+            sections: [],
+            activeSection: null,
+            activeSessions: [],
+            messages: [],
+            notifications: [],
+            attendanceData: [],
+            students: {},
+            sectionAttendance: {},
+            plusPoints: {},
+            rankings: {},
+            settings: {
+                locationAccess: true,
+                autoCheckIn: true,
+                notifications: true,
+                silentScan: false,
+                defaultRadius: 20,
+                autoSessions: true,
+                beaconMode: true,
+                highContrast: false,
+                largeText: false,
+                reduceMotion: false,
+                dyslexiaFont: false,
+                voiceCommands: false,
+                hapticFeedback: true,
+                analyticsEnabled: false
+            },
+            security: {
+                sessionTimeout: 30 * 60 * 1000,
+                lastActivity: Date.now(),
+                nearId: null,
+                deviceId: null,
+                sessionKey: null
+            },
+            privacy: {
+                trackingConsent: null,
+                dataRetention: 90,
+                dataSharing: false
+            },
+            nearId: {
+                identityColor: '',
+                profileEmoji: '',
+                lastEmojiChange: null
+            },
+            location: {
+                current: null,
+                lastUpdate: null,
+                accuracy: null,
+                map: null,
+                marker: null,
+                circle: null
+            },
+            checkInStatus: {
+                checkingIn: false,
+                lastCheckIn: null,
+                autoCheckInEnabled: false,
+                autoCheckInInterval: null
+            },
+            silentScan: {
+                active: false,
+                lastScan: null,
+                blockedUntil: null
+            },
+            manualAttendance: {},
+            analytics: {
+                features: {
+                    dashboard: 0,
+                    sections: 0,
+                    sessions: 0,
+                    messages: 0,
+                    checkIn: 0,
+                    autoCheckIn: 0,
+                    manualCheckIn: 0,
+                    messaging: 0,
+                    qrScan: 0,
+                    map: 0,
+                    voiceCommands: 0
+                },
+                lastReport: null
+            },
+            resetCode: null
         };
 
         // DOM Elements
         const elements = {
-            loginScreen: document.getElementById('loginScreen'),
+            landingContainer: document.getElementById('landingContainer'),
+            landingSheet: document.getElementById('landingSheet'),
+            authContainer: document.getElementById('authContainer'),
+            resetContainer: document.getElementById('resetContainer'),
+            loadingContainer: document.getElementById('loadingContainer'),
             appContainer: document.getElementById('appContainer'),
-            sidebar: document.querySelector('.sidebar'),
-            mainContent: document.querySelector('.main-content'),
-            menuToggle: document.querySelector('.menu-toggle'),
-            closeSidebar: document.querySelector('.close-sidebar'),
-            menuItems: document.querySelectorAll('.menu-item'),
-            pages: document.querySelectorAll('.page'),
-            themeToggle: document.querySelector('.theme-toggle'),
-            createSectionModal: document.getElementById('createSectionModal'),
-            editSectionModal: document.getElementById('editSectionModal'),
-            deleteSectionModal: document.getElementById('deleteSectionModal'),
-            sectionStudentsModal: document.getElementById('sectionStudentsModal'),
-            sectionInvitationModal: document.getElementById('sectionInvitationModal'),
-            sectionEnrollmentModal: document.getElementById('sectionEnrollmentModal'),
-            checkinModal: document.getElementById('checkinModal'),
-            joinSectionModal: document.getElementById('joinSectionModal'),
-            manualAttendanceModal: document.getElementById('manualAttendanceModal'),
-            bleCheckinModal: document.getElementById('bleCheckinModal'),
-            manualCheckinOptionsModal: document.getElementById('manualCheckinOptionsModal'),
-            sessionManagementModal: document.getElementById('sessionManagementModal'),
-            wattModal: document.getElementById('wattModal'),
-            autoCheckinModal: document.getElementById('autoCheckinModal'),
-            modalClose: document.querySelector('.modal-close'),
-            createSectionBtn: document.getElementById('createSectionBtn'),
-            createSectionBtn2: document.getElementById('createSectionBtn2'),
-            headerTitle: document.querySelector('.header-title'),
-            userAvatar: document.getElementById('userAvatar'),
-            userName: document.getElementById('userName'),
-            userRole: document.getElementById('userRole'),
-            userRoleDisplay: document.getElementById('userRoleDisplay'),
-            logoutBtn: document.getElementById('logoutBtn'),
-            toastContainer: document.getElementById('toastContainer'),
-            teacherDashboard: document.getElementById('teacherDashboard'),
-            studentDashboard: document.getElementById('studentDashboard'),
-            teacherSections: document.getElementById('teacherSections'),
-            studentSections: document.getElementById('studentSections'),
-            teacherAttendance: document.getElementById('teacherAttendance'),
-            studentAttendance: document.getElementById('studentAttendance'),
-            teacherOnlyElements: document.querySelectorAll('.teacher-only'),
-            joinSectionBtn: document.getElementById('joinSectionBtn'),
-            manualAttendanceBtn: document.getElementById('manualAttendanceBtn'),
-            manualCheckinBtn: document.getElementById('manualCheckinBtn')
+            mainContent: document.getElementById('mainContent'),
+            navigationBar: document.getElementById('navigationBar'),
+            navItems: document.querySelectorAll('.nav-item'),
+            fabButton: document.getElementById('fabButton'),
+            modalBackdrop: document.getElementById('modalBackdrop'),
+            bottomSheet: document.getElementById('bottomSheet'),
+            toast: document.getElementById('toast'),
+            toastMessage: document.getElementById('toastMessage'),
+            menuButton: document.getElementById('menuButton'),
+            searchButton: document.getElementById('searchButton'),
+            notificationsButton: document.getElementById('notificationsButton'),
+            profileButton: document.getElementById('profileButton'),
+            topAppBar: document.getElementById('topAppBar'),
+            loginForm: document.getElementById('loginForm'),
+            signupForm: document.getElementById('signupForm'),
+            resetForm: document.getElementById('resetForm'),
+            authToggle: document.getElementById('authToggle'),
+            authToggleText: document.getElementById('authToggleText'),
+            authBackButton: document.getElementById('authBackButton'),
+            resetBackButton: document.getElementById('resetBackButton'),
+            backToLogin: document.getElementById('backToLogin'),
+            forgotPassword: document.getElementById('forgotPassword'),
+            trackingConsent: document.getElementById('trackingConsent'),
+            sessionTimeoutModal: document.getElementById('sessionTimeoutModal'),
+            extendSessionButton: document.getElementById('extendSession'),
+            showSignIn: document.getElementById('showSignIn'),
+            showSignUp: document.getElementById('showSignUp'),
+            fullscreenModal: document.getElementById('fullscreenModal'),
+            fullscreenContent: document.getElementById('fullscreenContent'),
+            fullscreenTitle: document.getElementById('fullscreenTitle'),
+            fullscreenBackButton: document.getElementById('fullscreenBackButton'),
+            fullscreenClose: document.getElementById('fullscreenClose')
         };
 
-        // Enhanced Neural Network Engine for Location Validation
-        const NeuralNetworkEngine = {
-            calculateDistance: function(lat1, lon1, lat2, lon2) {
-                const R = 6371000;
-                const dLat = (lat2 - lat1) * Math.PI / 180;
-                const dLon = (lon2 - lon1) * Math.PI / 180;
-                const a =
-                    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-                return R * c;
-            },
+        // Initialize the application
+        function initApp() {
+            setupEventListeners();
+            initializePrivacySettings();
+            initializeAccessibility();
+            setupSessionManagement();
+            setupServiceWorker();
+            generateDeviceFingerprint();
+            checkAuthState();
+            initializeWATT();
+        }
 
-            validateLocation: function(userLocation, sectionLocation, radius, userAccuracy = 10) {
-                const distance = this.calculateDistance(
-                    userLocation.latitude,
-                    userLocation.longitude,
-                    sectionLocation.latitude,
-                    sectionLocation.longitude
+        // Initialize Web App Tracking Transparency
+        function initializeWATT() {
+            const savedConsent = localStorage.getItem('wattConsent');
+            if (!savedConsent) {
+                elements.trackingConsent.style.display = 'block';
+            } else {
+                appState.privacy.trackingConsent = savedConsent;
+                applyWATTSettings(savedConsent);
+            }
+
+            document.getElementById('acceptTracking').addEventListener('click', () => {
+                setWATTConsent('essential');
+            });
+
+            document.getElementById('acceptAllTracking').addEventListener('click', () => {
+                setWATTConsent('all');
+            });
+
+            document.getElementById('rejectTracking').addEventListener('click', () => {
+                setWATTConsent('none');
+            });
+        }
+
+        function setWATTConsent(level) {
+            appState.privacy.trackingConsent = level;
+            localStorage.setItem('wattConsent', level);
+            elements.trackingConsent.style.display = 'none';
+            applyWATTSettings(level);
+            showToast(`Tracking preferences set to: ${level}`);
+        }
+
+        function applyWATTSettings(level) {
+            if (level === 'essential' || level === 'all') {
+                appState.settings.analyticsEnabled = true;
+            } else {
+                appState.settings.analyticsEnabled = false;
+            }
+        }
+
+        // Track feature usage
+        function trackFeatureUsage(feature) {
+            if (!appState.settings.analyticsEnabled) return;
+
+            if (appState.analytics.features[feature] !== undefined) {
+                appState.analytics.features[feature]++;
+            }
+        }
+
+        // Generate device fingerprint
+        function generateDeviceFingerprint() {
+            const components = [
+                navigator.userAgent,
+                navigator.language,
+                screen.width + 'x' + screen.height,
+                new Date().getTimezoneOffset(),
+                navigator.hardwareConcurrency || 'unknown',
+                navigator.platform
+            ];
+            appState.security.deviceId = btoa(components.join('|')).substring(0, 32);
+        }
+
+        // Check authentication state
+        function checkAuthState() {
+            showLoading();
+            auth.onAuthStateChanged(async (user) => {
+                if (user) {
+                    await loadUserData(user);
+                    showApp();
+                    initializeNearID();
+                    startSessionTimer();
+                    setupUserRealTimeListeners();
+                    startLocationMonitoring();
+                    if (appState.settings.voiceCommands) {
+                        voiceCommands.init();
+                    }
+                    trackFeatureUsage('dashboard');
+                } else {
+                    showLanding();
+                }
+            });
+        }
+
+        // Start location monitoring
+        function startLocationMonitoring() {
+            if (!appState.settings.locationAccess) return;
+
+            if (appState.checkInStatus.autoCheckInEnabled) {
+                startAutoCheckIn();
+            }
+
+            // Update current location periodically
+            setInterval(() => {
+                if (appState.currentUser && appState.settings.locationAccess) {
+                    updateCurrentLocation();
+                }
+            }, 30000);
+        }
+
+        // Update current location
+        async function updateCurrentLocation() {
+            try {
+                const position = await getCurrentPosition();
+                appState.location.current = {
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude,
+                    accuracy: position.coords.accuracy,
+                    timestamp: new Date().toISOString()
+                };
+                appState.location.lastUpdate = new Date().toISOString();
+
+                // Update map marker if exists
+                if (appState.location.marker) {
+                    appState.location.marker.setLatLng([position.coords.latitude, position.coords.longitude]);
+                }
+            } catch (error) {
+                console.warn('Location update failed:', error.message);
+            }
+        }
+
+        // Start auto check-in
+        function startAutoCheckIn() {
+            if (!appState.settings.autoCheckIn || !appState.settings.locationAccess) {
+                return;
+            }
+
+            appState.checkInStatus.autoCheckInEnabled = true;
+
+            const autoCheckInInterval = setInterval(async () => {
+                if (!appState.location.current || appState.activeSessions.length === 0) {
+                    return;
+                }
+
+                for (const session of appState.activeSessions) {
+                    if (session.autoCheckIn) {
+                        await checkAutoCheckIn(session);
+                    }
+                }
+            }, 30000);
+
+            appState.checkInStatus.autoCheckInInterval = autoCheckInInterval;
+        }
+
+        // Check auto check-in for a session
+        async function checkAutoCheckIn(session) {
+            try {
+                const distance = calculateDistance(
+                    appState.location.current.lat,
+                    appState.location.current.lng,
+                    session.location.lat,
+                    session.location.lng
                 );
 
-                const baseConfidence = Math.max(0, 1 - (distance / (radius * 2)));
-                const accuracyFactor = Math.max(0, 1 - (userAccuracy / 50));
-
-                const now = new Date();
-                const hour = now.getHours();
-                let timeFactor = 1;
-
-                if (hour < 7 || hour > 22) {
-                    timeFactor = 0.8;
-                }
-
-                const day = now.getDay();
-                if (day === 0 || day === 6) {
-                    timeFactor *= 0.7;
-                }
-
-                const confidence = baseConfidence * accuracyFactor * timeFactor;
-                const fraudDetected = this.detectFraudPatterns(userLocation, sectionLocation, confidence);
-
-                return {
-                    valid: distance <= radius && confidence > 0.3,
-                    distance: distance,
-                    confidence: confidence,
-                    fraudDetected: fraudDetected,
-                    accuracy: userAccuracy
-                };
-            },
-
-            detectFraudPatterns: function(userLocation, sectionLocation, confidence) {
-                if (state.currentLocation && state.currentLocation.timestamp) {
-                    const timeDiff = (new Date() - state.currentLocation.timestamp) / 1000;
-                    const prevLocation = state.currentLocation;
-
-                    const distanceJump = this.calculateDistance(
-                        prevLocation.latitude,
-                        prevLocation.longitude,
-                        userLocation.latitude,
-                        userLocation.longitude
+                if (distance <= session.radius) {
+                    const today = new Date().toISOString().split('T')[0];
+                    const alreadyCheckedIn = appState.attendanceData.some(record =>
+                        record.sessionId === session.id &&
+                        record.timestamp.split('T')[0] === today &&
+                        record.status === 'present'
                     );
 
-                    if (timeDiff > 0 && distanceJump / timeDiff > 100) {
-                        return true;
+                    if (!alreadyCheckedIn) {
+                        await performCheckIn(session.id, 'auto');
+                        trackFeatureUsage('autoCheckIn');
                     }
                 }
-
-                const commonSpoofingLocations = [{
-                        lat: 37.7749,
-                        lon: -122.4194
-                    },
-                    {
-                        lat: 40.7128,
-                        lon: -74.0060
-                    },
-                    {
-                        lat: 51.5074,
-                        lon: -0.1278
-                    },
-                    {
-                        lat: 35.6762,
-                        lon: 139.6503
-                    }
-                ];
-
-                for (const loc of commonSpoofingLocations) {
-                    const distance = this.calculateDistance(
-                        userLocation.latitude,
-                        userLocation.longitude,
-                        loc.lat,
-                        loc.lon
-                    );
-
-                    if (distance < 1000) {
-                        return true;
-                    }
-                }
-
-                if (userLocation.altitude === 0 || userLocation.altitude === 100) {
-                    return true;
-                }
-
-                return confidence < 0.2;
-            },
-
-            generateNearId: function() {
-                if (state.nearId) return state.nearId;
-
-                const components = [
-                    navigator.userAgent,
-                    navigator.platform,
-                    screen.width + 'x' + screen.height,
-                    new Date().getTimezoneOffset(),
-                    navigator.language,
-                    !!navigator.bluetooth
-                ];
-
-                let id = '';
-                for (const component of components) {
-                    let hash = 0;
-                    for (let i = 0; i < component.length; i++) {
-                        const char = component.charCodeAt(i);
-                        hash = ((hash << 5) - hash) + char;
-                        hash = hash & hash;
-                    }
-                    id += Math.abs(hash).toString(36).substring(0, 4);
-                }
-
-                state.nearId = id;
-                localStorage.setItem('nearcheck_nearid', id);
-                return id;
-            },
-
-            validateNearId: function(storedId, currentId) {
-                return storedId === currentId;
-            },
-
-            loadNearId: function() {
-                const storedId = localStorage.getItem('nearcheck_nearid');
-                if (storedId) {
-                    state.nearId = storedId;
-                    return storedId;
-                }
-                return this.generateNearId();
+            } catch (error) {
+                console.error('Auto check-in error:', error);
             }
-        };
+        }
 
-        // Enhanced Location Services
-        const LocationService = {
-            getCurrentLocation: function(highAccuracy = false) {
-                return new Promise((resolve, reject) => {
-                    if (!navigator.geolocation) {
-                        reject(new Error('Geolocation is not supported by this browser.'));
-                        return;
+        // Setup user-specific real-time listeners
+        function setupUserRealTimeListeners() {
+            // Listen for section updates
+            const sectionsQuery = appState.currentUser.role === 'teacher' ?
+                db.collection('sections').where('teacherId', '==', appState.currentUser.id) :
+                db.collection('sections').where('students', 'array-contains', appState.currentUser.id);
+
+            sectionsQuery.onSnapshot((snapshot) => {
+                appState.sections = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+                if (appState.currentPage === 'sections' || appState.currentPage === 'dashboard') {
+                    loadPage(appState.currentPage);
+                }
+            });
+
+            // Listen for active sessions
+            const sessionsQuery = appState.currentUser.role === 'student' ?
+                db.collection('sessions')
+                .where('students', 'array-contains', appState.currentUser.id)
+                .where('active', '==', true) :
+                db.collection('sessions')
+                .where('teacherId', '==', appState.currentUser.id)
+                .where('active', '==', true);
+
+            sessionsQuery.onSnapshot((snapshot) => {
+                appState.activeSessions = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+                if (appState.currentPage === 'dashboard' || appState.currentPage === 'sections' || appState.currentPage === 'sessions') {
+                    loadPage(appState.currentPage);
+                }
+            });
+
+            // Listen for messages
+            db.collection('messages')
+                .where('recipients', 'array-contains', appState.currentUser.id)
+                .orderBy('timestamp', 'desc')
+                .limit(50)
+                .onSnapshot((snapshot) => {
+                    appState.messages = snapshot.docs.map(doc => ({
+                        id: doc.id,
+                        ...doc.data()
+                    }));
+                    if (appState.currentPage === 'messages') {
+                        loadPage('messages');
                     }
+                    updateNotificationBadge();
+                });
 
-                    const options = {
-                        enableHighAccuracy: highAccuracy,
-                        timeout: 15000,
-                        maximumAge: 0
+            // Listen for attendance records
+            db.collection('attendance')
+                .where('userId', '==', appState.currentUser.id)
+                .orderBy('timestamp', 'desc')
+                .limit(100)
+                .onSnapshot((snapshot) => {
+                    appState.attendanceData = snapshot.docs.map(doc => ({
+                        id: doc.id,
+                        ...doc.data()
+                    }));
+                });
+
+            // Listen for plus points
+            db.collection('plusPoints')
+                .where('userId', '==', appState.currentUser.id)
+                .onSnapshot((snapshot) => {
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        appState.plusPoints[data.sectionId] = data.points || 0;
+                    });
+                });
+        }
+
+        // Load user data from Firestore
+        async function loadUserData(user) {
+            try {
+                const userDoc = await db.collection('users').doc(user.uid).get();
+                if (userDoc.exists) {
+                    const userData = userDoc.data();
+                    appState.currentUser = {
+                        id: user.uid,
+                        email: user.email,
+                        ...userData
                     };
 
-                    navigator.geolocation.getCurrentPosition(
-                        position => {
-                            const location = {
-                                latitude: position.coords.latitude,
-                                longitude: position.coords.longitude,
-                                accuracy: position.coords.accuracy,
-                                altitude: position.coords.altitude,
-                                altitudeAccuracy: position.coords.altitudeAccuracy,
-                                heading: position.coords.heading,
-                                speed: position.coords.speed,
-                                timestamp: new Date()
-                            };
-                            state.currentLocation = location;
-                            resolve(location);
-                        },
-                        error => {
-                            console.error('Geolocation error:', error);
-                            reject(error);
-                        },
-                        options
-                    );
-                });
-            },
-
-            requestLocationPermission: function() {
-                return new Promise((resolve, reject) => {
-                    if (state.locationPermission === 'granted') {
-                        resolve(true);
-                        return;
+                    if (userData.nearId) {
+                        appState.nearId = userData.nearId;
+                    } else {
+                        await initializeUserNearID(user.uid);
                     }
 
-                    if (state.locationPermission === 'denied') {
-                        reject(new Error('Location permission was previously denied'));
-                        return;
-                    }
-
-                    elements.wattModal.classList.add('active');
-
-                    document.getElementById('wattAllow').addEventListener('click', function handler() {
-                        document.getElementById('wattAllow').removeEventListener('click', handler);
-                        elements.wattModal.classList.remove('active');
-                        LocationService.getCurrentLocation()
-                            .then(() => {
-                                state.locationPermission = 'granted';
-                                resolve(true);
-                            })
-                            .catch(error => {
-                                reject(error);
-                            });
-                    }, {
-                        once: true
-                    });
-
-                    document.getElementById('wattDeny').addEventListener('click', function handler() {
-                        document.getElementById('wattDeny').removeEventListener('click', handler);
-                        elements.wattModal.classList.remove('active');
-                        state.locationPermission = 'denied';
-                        reject(new Error('Location permission denied by user'));
-                    }, {
-                        once: true
-                    });
-                });
-            },
-
-            checkLocationSupport: function() {
-                return !!navigator.geolocation;
-            },
-
-            getAccuracyLevel: function(accuracy) {
-                if (accuracy < 10) return 'high';
-                if (accuracy < 30) return 'medium';
-                return 'low';
-            },
-
-            startContinuousMonitoring: function(callback, interval = 30000) {
-                if (!navigator.geolocation) {
-                    console.error('Geolocation not supported');
-                    return null;
-                }
-
-                const watchId = navigator.geolocation.watchPosition(
-                    position => {
-                        const location = {
-                            latitude: position.coords.latitude,
-                            longitude: position.coords.longitude,
-                            accuracy: position.coords.accuracy,
-                            altitude: position.coords.altitude,
-                            altitudeAccuracy: position.coords.altitudeAccuracy,
-                            heading: position.coords.heading,
-                            speed: position.coords.speed,
-                            timestamp: new Date()
-                        };
-                        state.currentLocation = location;
-                        callback(location);
-                    },
-                    error => {
-                        console.error('Location monitoring error:', error);
-                    }, {
-                        enableHighAccuracy: true,
-                        timeout: 10000,
-                        maximumAge: 0
-                    }
-                );
-
-                return watchId;
-            },
-
-            stopContinuousMonitoring: function(watchId) {
-                if (watchId && navigator.geolocation) {
-                    navigator.geolocation.clearWatch(watchId);
-                }
-            }
-        };
-
-        // Enhanced BLE Service
-        const BLEService = {
-            currentDevice: null,
-            isScanning: false,
-
-            scanForDevices: function() {
-                return new Promise((resolve, reject) => {
-                    if (!navigator.bluetooth) {
-                        reject(new Error('Web Bluetooth is not supported by this browser'));
-                        return;
-                    }
-
-                    if (this.isScanning) {
-                        reject(new Error('Scan already in progress'));
-                        return;
-                    }
-
-                    this.isScanning = true;
-                    showToast('info', 'Bluetooth Scan', 'Looking for nearby Bluetooth devices...');
-
-                    state.bleDevices = [];
-
-                    navigator.bluetooth.requestDevice({
-                            acceptAllDevices: true,
-                            optionalServices: ['battery_service', 'device_information']
-                        })
-                        .then(device => {
-                            this.isScanning = false;
-                            this.currentDevice = device;
-
-                            const bleDevice = {
-                                id: device.id,
-                                name: device.name || 'Unknown Device',
-                                connected: false
-                            };
-
-                            state.bleDevices.push(bleDevice);
-                            resolve(state.bleDevices);
-                        })
-                        .catch(error => {
-                            this.isScanning = false;
-                            console.error('Bluetooth scan error:', error);
-                            reject(error);
-                        });
-                });
-            },
-
-            validateBLEDevice: function(deviceId, sectionId) {
-                return new Promise((resolve, reject) => {
-                    db.collection('sections').doc(sectionId).get()
-                        .then(sectionDoc => {
-                            if (!sectionDoc || !sectionDoc.exists) {
-                                throw new Error('Section not found');
-                            }
-
-                            const section = sectionDoc.data();
-
-                            if (!section.students || !section.students.includes(state.currentUser.uid)) {
-                                throw new Error('You are not enrolled in this section');
-                            }
-
-                            resolve({
-                                valid: true,
-                                deviceId: deviceId,
-                                sectionId: sectionId,
-                                sectionName: section.name
-                            });
-                        })
-                        .catch(error => {
-                            reject(error);
-                        });
-                });
-            },
-
-            isAvailable: function() {
-                return !!navigator.bluetooth;
-            },
-
-            disconnect: function() {
-                if (this.currentDevice && this.currentDevice.gatt && this.currentDevice.gatt.connected) {
-                    this.currentDevice.gatt.disconnect();
-                }
-                this.currentDevice = null;
-            }
-        };
-
-        // Session Management Service
-        const SessionService = {
-            startSession: function(sectionId, duration) {
-                const sessionData = {
-                    sectionId: sectionId,
-                    startTime: new Date(),
-                    duration: duration,
-                    status: 'active',
-                    teacherId: state.currentUser.uid
-                };
-
-                return db.collection('sessions').add(sessionData)
-                    .then(docRef => {
-                        state.activeSessions[sectionId] = {
-                            id: docRef.id,
-                            ...sessionData
-                        };
-                        
-                        // Start timer
-                        this.startSessionTimer(sectionId, duration);
-                        
-                        return docRef.id;
-                    });
-            },
-
-            stopSession: function(sectionId) {
-                if (!state.activeSessions[sectionId]) {
-                    return Promise.reject(new Error('No active session found'));
-                }
-
-                const sessionId = state.activeSessions[sectionId].id;
-                
-                // Stop timer
-                this.stopSessionTimer(sectionId);
-                
-                return db.collection('sessions').doc(sessionId).update({
-                    status: 'ended',
-                    endTime: new Date()
-                }).then(() => {
-                    delete state.activeSessions[sectionId];
-                    return sessionId;
-                });
-            },
-
-            pauseSession: function(sectionId) {
-                if (!state.activeSessions[sectionId]) {
-                    return Promise.reject(new Error('No active session found'));
-                }
-
-                const sessionId = state.activeSessions[sectionId].id;
-                
-                // Pause timer
-                this.pauseSessionTimer(sectionId);
-                
-                return db.collection('sessions').doc(sessionId).update({
-                    status: 'paused',
-                    pausedAt: new Date()
-                });
-            },
-
-            resumeSession: function(sectionId) {
-                if (!state.activeSessions[sectionId]) {
-                    return Promise.reject(new Error('No active session found'));
-                }
-
-                const sessionId = state.activeSessions[sectionId].id;
-                
-                // Resume timer
-                this.resumeSessionTimer(sectionId);
-                
-                return db.collection('sessions').doc(sessionId).update({
-                    status: 'active',
-                    resumedAt: new Date()
-                });
-            },
-
-            startSessionTimer: function(sectionId, duration) {
-                const startTime = new Date();
-                const endTime = new Date(startTime.getTime() + duration * 60000);
-                
-                state.sessionTimers[sectionId] = {
-                    startTime: startTime,
-                    endTime: endTime,
-                    interval: setInterval(() => {
-                        this.updateSessionTimer(sectionId);
-                    }, 1000)
-                };
-            },
-
-            stopSessionTimer: function(sectionId) {
-                if (state.sessionTimers[sectionId]) {
-                    clearInterval(state.sessionTimers[sectionId].interval);
-                    delete state.sessionTimers[sectionId];
-                }
-            },
-
-            pauseSessionTimer: function(sectionId) {
-                if (state.sessionTimers[sectionId]) {
-                    clearInterval(state.sessionTimers[sectionId].interval);
-                    state.sessionTimers[sectionId].pausedAt = new Date();
-                }
-            },
-
-            resumeSessionTimer: function(sectionId) {
-                if (state.sessionTimers[sectionId] && state.sessionTimers[sectionId].pausedAt) {
-                    const pausedDuration = new Date() - state.sessionTimers[sectionId].pausedAt;
-                    state.sessionTimers[sectionId].endTime = new Date(state.sessionTimers[sectionId].endTime.getTime() + pausedDuration);
-                    
-                    state.sessionTimers[sectionId].interval = setInterval(() => {
-                        this.updateSessionTimer(sectionId);
-                    }, 1000);
-                    
-                    delete state.sessionTimers[sectionId].pausedAt;
-                }
-            },
-
-            updateSessionTimer: function(sectionId) {
-                if (!state.sessionTimers[sectionId]) return;
-                
-                const now = new Date();
-                const timeLeft = state.sessionTimers[sectionId].endTime - now;
-                
-                if (timeLeft <= 0) {
-                    // Auto-end session
-                    this.stopSession(sectionId);
-                    showToast('info', 'Session Ended', 'Session has automatically ended');
-                    return;
-                }
-                
-                const minutes = Math.floor(timeLeft / 60000);
-                const seconds = Math.floor((timeLeft % 60000) / 1000);
-                
-                const timerElement = document.getElementById('sessionTimer');
-                if (timerElement) {
-                    timerElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-                }
-            },
-
-            getActiveSession: function(sectionId) {
-                return state.activeSessions[sectionId] || null;
-            },
-
-            isSessionActive: function(sectionId) {
-                return !!state.activeSessions[sectionId] && state.activeSessions[sectionId].status === 'active';
-            },
-
-            loadActiveSessions: function() {
-                if (state.userRole !== 'teacher') return Promise.resolve();
-                
-                return db.collection('sessions')
-                    .where('teacherId', '==', state.currentUser.uid)
-                    .where('status', '==', 'active')
-                    .get()
-                    .then(snapshot => {
-                        snapshot.forEach(doc => {
-                            const session = {
-                                id: doc.id,
-                                ...doc.data()
-                            };
-                            state.activeSessions[session.sectionId] = session;
-                            
-                            // Restart timer for active session
-                            if (session.status === 'active') {
-                                const timeLeft = session.duration * 60000 - (new Date() - session.startTime.toDate());
-                                if (timeLeft > 0) {
-                                    this.startSessionTimer(session.sectionId, Math.ceil(timeLeft / 60000));
-                                } else {
-                                    // Session should have ended
-                                    this.stopSession(session.sectionId);
-                                }
-                            }
-                        });
-                    });
-            }
-        };
-
-        // Auto Check-in Service
-        const AutoCheckinService = {
-            isActive: false,
-            monitoringInterval: null,
-            countdownTimer: null,
-            currentValidation: null,
-
-            start: function() {
-                if (this.isActive || state.userRole !== 'student' || !state.autoCheckinEnabled) {
-                    return;
-                }
-
-                this.isActive = true;
-                console.log('Auto check-in monitoring started');
-
-                state.locationWatchId = LocationService.startContinuousMonitoring((location) => {
-                    this.checkLocationForAutoCheckin(location);
-                });
-
-                this.checkLocationForAutoCheckin(state.currentLocation);
-            },
-
-            stop: function() {
-                this.isActive = false;
-                if (this.monitoringInterval) {
-                    clearInterval(this.monitoringInterval);
-                    this.monitoringInterval = null;
-                }
-                if (this.countdownTimer) {
-                    clearInterval(this.countdownTimer);
-                    this.countdownTimer = null;
-                }
-                if (state.locationWatchId) {
-                    LocationService.stopContinuousMonitoring(state.locationWatchId);
-                    state.locationWatchId = null;
-                }
-                this.hideAutoCheckinModal();
-            },
-
-            checkLocationForAutoCheckin: function(location) {
-                if (!location) {
-                    LocationService.getCurrentLocation()
-                        .then(newLocation => {
-                            this.processLocationForAutoCheckin(newLocation);
-                        })
-                        .catch(error => {});
-                    return;
-                }
-
-                this.processLocationForAutoCheckin(location);
-            },
-
-            processLocationForAutoCheckin: function(location) {
-                const enrolledSections = state.sections.filter(section =>
-                    section.students && section.students.includes(state.currentUser.uid) && section.isActive
-                );
-
-                enrolledSections.forEach(section => {
-                    // Check if section has auto check-in enabled and session is active
-                    if (!section.autoCheckin || !SessionService.isSessionActive(section.id)) return;
-
-                    const validation = NeuralNetworkEngine.validateLocation(
-                        location,
-                        section.location,
-                        section.radius,
-                        location.accuracy
-                    );
-
-                    if (validation.valid && !validation.fraudDetected) {
-                        const today = new Date().toDateString();
-                        const todayCheckin = state.attendance.find(a =>
-                            a.sectionId === section.id &&
-                            a.studentId === state.currentUser.uid &&
-                            new Date(a.timestamp).toDateString() === today
-                        );
-
-                        if (!todayCheckin) {
-                            this.showAutoCheckinModal(section, location, validation);
-                        }
-                    }
-                });
-            },
-
-            showAutoCheckinModal: function(section, location, validation) {
-                if (state.currentAutoCheckinSection) {
-                    return;
-                }
-
-                state.currentAutoCheckinSection = section;
-                state.autoCheckinCountdown = 5;
-                this.currentValidation = validation;
-
-                document.getElementById('autoCheckinSectionName').textContent = section.name;
-                document.getElementById('autoCheckinDistance').textContent = validation.distance.toFixed(1);
-                document.getElementById('autoCheckinCountdown').textContent = state.autoCheckinCountdown;
-
-                elements.autoCheckinModal.classList.add('active');
-
-                this.countdownTimer = setInterval(() => {
-                    state.autoCheckinCountdown--;
-                    document.getElementById('autoCheckinCountdown').textContent = state.autoCheckinCountdown;
-
-                    if (state.autoCheckinCountdown <= 0) {
-                        this.processAutoCheckin(section, location, validation);
-                        clearInterval(this.countdownTimer);
-                        this.countdownTimer = null;
-                    }
-                }, 1000);
-            },
-
-            hideAutoCheckinModal: function() {
-                elements.autoCheckinModal.classList.remove('active');
-                state.currentAutoCheckinSection = null;
-                this.currentValidation = null;
-                if (this.countdownTimer) {
-                    clearInterval(this.countdownTimer);
-                    this.countdownTimer = null;
-                }
-            },
-
-            processAutoCheckin: function(section, location, validation) {
-                const attendanceData = {
-                    sectionId: section.id,
-                    sectionName: section.name,
-                    studentId: state.currentUser.uid,
-                    studentName: state.userData.name,
-                    timestamp: new Date(),
-                    location: {
-                        latitude: location.latitude,
-                        longitude: location.longitude,
-                        accuracy: location.accuracy
-                    },
-                    status: 'present',
-                    distance: validation.distance,
-                    confidence: validation.confidence,
-                    fraudDetected: validation.fraudDetected,
-                    method: 'auto',
-                    nearId: state.nearId
-                };
-
-                db.collection('attendance').add(attendanceData)
-                    .then(() => {
-                        showToast('success', 'Auto Check-in', `Checked into ${section.name} automatically`);
-                        this.hideAutoCheckinModal();
-                        loadAttendanceData();
-                    })
-                    .catch(error => {
-                        console.error('Auto check-in failed:', error);
-                        showToast('error', 'Auto Check-in Failed', 'Please try manual check-in');
-                        this.hideAutoCheckinModal();
-                    });
-            },
-
-            cancelAutoCheckin: function() {
-                this.hideAutoCheckinModal();
-                showToast('info', 'Auto Check-in', 'Auto check-in cancelled');
-            },
-
-            updateValidation: function(location) {
-                if (!state.currentAutoCheckinSection || !this.currentValidation) return;
-
-                const validation = NeuralNetworkEngine.validateLocation(
-                    location,
-                    state.currentAutoCheckinSection.location,
-                    state.currentAutoCheckinSection.radius,
-                    location.accuracy
-                );
-
-                if (!validation.valid || validation.fraudDetected) {
-                    this.cancelAutoCheckin();
-                    showToast('warning', 'Location Changed', 'You moved away from the section location');
-                }
-            }
-        };
-
-        // Authentication Functions
-        function initAuth() {
-            auth.onAuthStateChanged((user) => {
-                if (user) {
-                    state.currentUser = user;
-                    loadUserData().then(() => {
-                        showApp();
-                        checkPendingInvitation();
-                    }).catch(error => {
-                        console.error('Error loading user data:', error);
-                        showToast('error', 'Login Error', 'Failed to load user data');
-                    });
+                    await loadUserSections();
+                    await loadUserMessages();
+                    await loadUserSettings();
+                    await loadUserPrivacy();
+                    await loadAttendanceData();
+                    await loadActiveSessions();
+                    await loadPlusPoints();
+
+                    updateUIForRole();
                 } else {
-                    showLogin();
+                    await createUserDocument(user);
                 }
-            });
-        }
-
-        function showLogin() {
-            elements.loginScreen.style.display = 'flex';
-            elements.appContainer.style.display = 'none';
-            document.getElementById('loginForm').reset();
-            document.getElementById('registerForm').reset();
-        }
-
-        function showApp() {
-            elements.loginScreen.style.display = 'none';
-            elements.appContainer.style.display = 'flex';
-            updateUserInterface();
-            setupRoleBasedUI();
-
-            NeuralNetworkEngine.loadNearId();
-
-            if (state.userRole !== 'teacher') {
-                LocationService.requestLocationPermission().catch(() => {
-                    showToast('warning', 'Location Access', 'Some features may not work without location access');
-                });
-            }
-
-            if (state.userRole === 'student' && state.autoCheckinEnabled) {
-                AutoCheckinService.start();
-            }
-
-            if (state.userRole === 'teacher') {
-                SessionService.loadActiveSessions();
-            }
-
-            loadDashboardData();
-        }
-
-        function updateUserInterface() {
-            if (state.currentUser && state.userData) {
-                const displayName = state.userData.name || state.currentUser.email.split('@')[0];
-                elements.userName.textContent = displayName;
-                elements.userAvatar.textContent = displayName.charAt(0).toUpperCase();
-                elements.userRole.textContent = state.userRole === 'teacher' ? 'Teacher' : 'Student';
-                elements.userRoleDisplay.value = state.userRole === 'teacher' ? 'Teacher' : 'Student';
-
-                if (document.getElementById('displayName')) {
-                    document.getElementById('displayName').value = displayName;
-                }
-                if (document.getElementById('userEmail')) {
-                    document.getElementById('userEmail').value = state.currentUser.email;
-                }
+            } catch (error) {
+                console.error('Error loading user data:', error);
+                showToast('Error loading user data');
             }
         }
 
-        function setupRoleBasedUI() {
-            if (state.userRole === 'teacher') {
-                elements.teacherOnlyElements.forEach(el => {
-                    el.style.display = 'flex';
-                });
-                if (elements.teacherDashboard) elements.teacherDashboard.style.display = 'block';
-                if (elements.studentDashboard) elements.studentDashboard.style.display = 'none';
-                if (elements.teacherSections) elements.teacherSections.style.display = 'block';
-                if (elements.studentSections) elements.studentSections.style.display = 'none';
-                if (elements.teacherAttendance) elements.teacherAttendance.style.display = 'block';
-                if (elements.studentAttendance) elements.studentAttendance.style.display = 'none';
-
-                // Hide student-only location settings
-                document.getElementById('studentLocationSettings').style.display = 'none';
+        // Update UI based on user role
+        function updateUIForRole() {
+            const sessionsNav = document.querySelector('.nav-item[data-page="sessions"]');
+            if (appState.currentUser.role === 'teacher') {
+                sessionsNav.style.display = 'flex';
             } else {
-                elements.teacherOnlyElements.forEach(el => {
-                    el.style.display = 'none';
-                });
-                if (elements.teacherDashboard) elements.teacherDashboard.style.display = 'none';
-                if (elements.studentDashboard) elements.studentDashboard.style.display = 'block';
-                if (elements.teacherSections) elements.teacherSections.style.display = 'none';
-                if (elements.studentSections) elements.studentSections.style.display = 'block';
-                if (elements.teacherAttendance) elements.teacherAttendance.style.display = 'none';
-                if (elements.studentAttendance) elements.studentAttendance.style.display = 'block';
-
-                // Show student-only location settings
-                document.getElementById('studentLocationSettings').style.display = 'block';
+                sessionsNav.style.display = 'none';
             }
         }
 
-        // Check for pending invitation after login
-        function checkPendingInvitation() {
-            const invitation = localStorage.getItem('nearcheck_invitation');
-            if (invitation) {
-                const invitationData = JSON.parse(invitation);
-                if (invitationData.sectionId) {
-                    showSectionEnrollmentModal(invitationData.sectionId);
-                }
-                localStorage.removeItem('nearcheck_invitation');
-            }
-        }
+        // Create user document in Firestore
+        async function createUserDocument(user) {
+            const identityColor = getRandomColor();
+            const profileEmoji = getInitials(document.getElementById('signupName')?.value || 'User');
 
-        // Login/Register Event Listeners
-        document.getElementById('loginForm').addEventListener('submit', (e) => {
-            e.preventDefault();
-            const email = document.getElementById('loginEmail').value;
-            const password = document.getElementById('loginPassword').value;
-
-            auth.signInWithEmailAndPassword(email, password)
-                .then((userCredential) => {
-                    showToast('success', 'Welcome Back', 'Successfully signed in!');
-                })
-                .catch((error) => {
-                    showToast('error', 'Sign In Failed', error.message);
-                });
-        });
-
-        document.getElementById('registerForm').addEventListener('submit', (e) => {
-            e.preventDefault();
-            const name = document.getElementById('registerName').value;
-            const email = document.getElementById('registerEmail').value;
-            const password = document.getElementById('registerPassword').value;
-            const confirmPassword = document.getElementById('registerConfirmPassword').value;
-            const birthDate = document.getElementById('registerBirthDate').value;
-            const invitationCode = document.getElementById('registerInvitationCode')?.value;
-
-            if (password !== confirmPassword) {
-                showToast('error', 'Registration Failed', 'Passwords do not match');
-                return;
-            }
-
-            if (!document.getElementById('registerTerms').checked) {
-                showToast('error', 'Registration Failed', 'Please accept the terms and conditions');
-                return;
-            }
-
-            const birthDateObj = new Date(birthDate);
-            const today = new Date();
-            let age = today.getFullYear() - birthDateObj.getFullYear();
-            const monthDiff = today.getMonth() - birthDateObj.getMonth();
-
-            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDateObj.getDate())) {
-                age--;
-            }
-
-            const roleElement = document.querySelector('.role-btn.active');
-            if (!roleElement) {
-                showToast('error', 'Registration Failed', 'Please select a role');
-                return;
-            }
-
-            const role = roleElement.dataset.role;
-            if (role === 'teacher' && age < 20) {
-                showToast('error', 'Registration Failed', 'Teachers must be at least 20 years old');
-                return;
-            }
-
-            if (role === 'student' && age < 13) {
-                showToast('error', 'Registration Failed', 'Students must be at least 13 years old');
-                return;
-            }
-
-            auth.createUserWithEmailAndPassword(email, password)
-                .then((userCredential) => {
-                    return userCredential.user.updateProfile({
-                        displayName: name
-                    }).then(() => {
-                        return db.collection('users').doc(userCredential.user.uid).set({
-                            name: name,
-                            email: email,
-                            role: role,
-                            birthDate: birthDate,
-                            nearId: NeuralNetworkEngine.generateNearId(),
-                            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                        });
-                    });
-                })
-                .then(() => {
-                    if (invitationCode) {
-                        state.pendingInvitation = invitationCode;
-                    }
-                    showToast('success', 'Account Created', 'Welcome to NearCheck+!');
-                })
-                .catch((error) => {
-                    showToast('error', 'Registration Failed', error.message);
-                });
-        });
-
-        // Role selector
-        document.querySelectorAll('.role-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('.role-btn').forEach(b => {
-                    b.classList.remove('active');
-                    b.setAttribute('aria-pressed', 'false');
-                });
-                btn.classList.add('active');
-                btn.setAttribute('aria-pressed', 'true');
-
-                // Show/hide invitation code field for students
-                const invitationCodeGroup = document.getElementById('invitationCodeGroup');
-                if (invitationCodeGroup) {
-                    invitationCodeGroup.style.display = btn.dataset.role === 'student' ? 'block' : 'none';
-                }
-            });
-
-            // Add keyboard support
-            btn.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    btn.click();
-                }
-            });
-        });
-
-        // Show/hide login/register forms
-        document.getElementById('showRegister').addEventListener('click', (e) => {
-            e.preventDefault();
-            document.getElementById('loginForm').style.display = 'none';
-            document.getElementById('registerForm').style.display = 'block';
-        });
-
-        document.getElementById('showLogin').addEventListener('click', (e) => {
-            e.preventDefault();
-            document.getElementById('registerForm').style.display = 'none';
-            document.getElementById('loginForm').style.display = 'block';
-        });
-
-        // Logout
-        elements.logoutBtn.addEventListener('click', () => {
-            if (state.userRole === 'student') {
-                AutoCheckinService.stop();
-            }
-
-            if (state.userRole === 'teacher') {
-                // Stop all active sessions
-                Object.keys(state.activeSessions).forEach(sectionId => {
-                    SessionService.stopSession(sectionId);
-                });
-            }
-
-            BLEService.disconnect();
-
-            auth.signOut().then(() => {
-                showToast('success', 'Signed Out', 'You have been successfully signed out');
-            });
-        });
-
-        // Event Listeners
-        function setupEventListeners() {
-            // Sidebar toggle
-            if (elements.menuToggle) {
-                elements.menuToggle.addEventListener('click', toggleSidebar);
-            }
-            if (elements.closeSidebar) {
-                elements.closeSidebar.addEventListener('click', toggleSidebar);
-            }
-
-            // Menu item clicks
-            elements.menuItems.forEach(item => {
-                if (item.id !== 'logoutBtn') {
-                    item.addEventListener('click', () => {
-                        const page = item.getAttribute('data-page');
-                        switchPage(page);
-
-                        elements.menuItems.forEach(i => i.classList.remove('active'));
-                        item.classList.add('active');
-
-                        if (window.innerWidth < 768) {
-                            toggleSidebar();
-                        }
-                    });
-
-                    // Add keyboard support
-                    item.addEventListener('keydown', (e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            item.click();
-                        }
-                    });
-                }
-            });
-
-            // Theme toggle
-            const darkModeToggle = document.getElementById('darkModeToggle');
-            if (darkModeToggle) {
-                darkModeToggle.addEventListener('change', toggleDarkMode);
-            }
-
-            // Modal controls
-            document.querySelectorAll('.modal-close').forEach(closeBtn => {
-                closeBtn.addEventListener('click', closeAllModals);
-            });
-
-            document.querySelectorAll('.modal-overlay').forEach(overlay => {
-                overlay.addEventListener('click', (e) => {
-                    if (e.target === overlay) {
-                        closeAllModals();
-                    }
-                });
-            });
-
-            // Create section buttons
-            if (elements.createSectionBtn) {
-                elements.createSectionBtn.addEventListener('click', openCreateSectionModal);
-            }
-            if (elements.createSectionBtn2) {
-                elements.createSectionBtn2.addEventListener('click', openCreateSectionModal);
-            }
-
-            // Section creation
-            const cancelSection = document.getElementById('cancelSection');
-            const saveSection = document.getElementById('saveSection');
-            if (cancelSection) cancelSection.addEventListener('click', closeAllModals);
-            if (saveSection) saveSection.addEventListener('click', createSection);
-
-            // Session duration change
-            const sessionDuration = document.getElementById('sessionDuration');
-            if (sessionDuration) {
-                sessionDuration.addEventListener('change', function() {
-                    const customContainer = document.getElementById('customDurationContainer');
-                    if (customContainer) {
-                        customContainer.style.display = this.value === 'custom' ? 'block' : 'none';
-                    }
-                });
-            }
-
-            // Session management
-            const startSessionBtn = document.getElementById('startSessionBtn');
-            const stopSessionBtn = document.getElementById('stopSessionBtn');
-            const pauseSessionBtn = document.getElementById('pauseSessionBtn');
-            const sessionDurationSelect = document.getElementById('sessionDurationSelect');
-            const closeSessionManagement = document.getElementById('closeSessionManagement');
-            
-            if (startSessionBtn) startSessionBtn.addEventListener('click', startSession);
-            if (stopSessionBtn) stopSessionBtn.addEventListener('click', stopSession);
-            if (pauseSessionBtn) pauseSessionBtn.addEventListener('click', pauseSession);
-            if (closeSessionManagement) closeSessionManagement.addEventListener('click', closeAllModals);
-            
-            if (sessionDurationSelect) {
-                sessionDurationSelect.addEventListener('change', function() {
-                    const customContainer = document.getElementById('sessionCustomDurationContainer');
-                    if (customContainer) {
-                        customContainer.style.display = this.value === 'custom' ? 'block' : 'none';
-                    }
-                });
-            }
-
-            // Check-in modal
-            const cancelCheckin = document.getElementById('cancelCheckin');
-            const confirmCheckin = document.getElementById('confirmCheckin');
-            if (cancelCheckin) cancelCheckin.addEventListener('click', closeAllModals);
-            if (confirmCheckin) confirmCheckin.addEventListener('click', processCheckin);
-
-            // Join section
-            if (elements.joinSectionBtn) {
-                elements.joinSectionBtn.addEventListener('click', openJoinSectionModal);
-            }
-            const cancelJoinSection = document.getElementById('cancelJoinSection');
-            const confirmJoinSection = document.getElementById('confirmJoinSection');
-            if (cancelJoinSection) cancelJoinSection.addEventListener('click', closeAllModals);
-            if (confirmJoinSection) confirmJoinSection.addEventListener('click', joinSection);
-
-            // Manual attendance
-            if (elements.manualAttendanceBtn) {
-                elements.manualAttendanceBtn.addEventListener('click', openManualAttendanceModal);
-            }
-            const cancelManualAttendance = document.getElementById('cancelManualAttendance');
-            const saveManualAttendance = document.getElementById('saveManualAttendance');
-            if (cancelManualAttendance) cancelManualAttendance.addEventListener('click', closeAllModals);
-            if (saveManualAttendance) saveManualAttendance.addEventListener('click', saveManualAttendance);
-
-            // BLE check-in
-            if (elements.manualCheckinBtn) {
-                elements.manualCheckinBtn.addEventListener('click', openManualCheckinOptionsModal);
-            }
-            const scanBleDevices = document.getElementById('scanBleDevices');
-            const cancelBleCheckin = document.getElementById('cancelBleCheckin');
-            const confirmBleCheckin = document.getElementById('confirmBleCheckin');
-            if (scanBleDevices) scanBleDevices.addEventListener('click', scanBLEDevices);
-            if (cancelBleCheckin) cancelBleCheckin.addEventListener('click', closeAllModals);
-            if (confirmBleCheckin) confirmBleCheckin.addEventListener('click', processBLECheckin);
-
-            // Manual check-in options
-            const cancelManualCheckinOptions = document.getElementById('cancelManualCheckinOptions');
-            if (cancelManualCheckinOptions) cancelManualCheckinOptions.addEventListener('click', closeAllModals);
-
-            // Auto check-in
-            const cancelAutoCheckin = document.getElementById('cancelAutoCheckin');
-            if (cancelAutoCheckin) cancelAutoCheckin.addEventListener('click', cancelAutoCheckin);
-
-            // Location settings
-            const checkinRadius = document.getElementById('checkinRadius');
-            const sectionRadius = document.getElementById('sectionRadius');
-            if (checkinRadius) {
-                checkinRadius.addEventListener('change', function() {
-                    const customContainer = document.getElementById('customRadiusContainer');
-                    if (customContainer) {
-                        customContainer.style.display = this.value === 'custom' ? 'block' : 'none';
-                    }
-                });
-            }
-            if (sectionRadius) {
-                sectionRadius.addEventListener('change', function() {
-                    const customContainer = document.getElementById('sectionCustomRadiusContainer');
-                    if (customContainer) {
-                        customContainer.style.display = this.value === 'custom' ? 'block' : 'none';
-                    }
-                });
-            }
-
-            // Save settings
-            const saveLocationSettings = document.getElementById('saveLocationSettings');
-            const saveSettings = document.getElementById('saveSettings');
-            const resetSettings = document.getElementById('resetSettings');
-            if (saveLocationSettings) saveLocationSettings.addEventListener('click', saveLocationSettings);
-            if (saveSettings) saveSettings.addEventListener('click', saveUserSettings);
-            if (resetSettings) resetSettings.addEventListener('click', resetUserSettings);
-
-            // Clear local data
-            const clearLocalData = document.getElementById('clearLocalData');
-            if (clearLocalData) clearLocalData.addEventListener('click', clearLocalData);
-
-            // Carousel controls
-            document.querySelectorAll('.prev').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const carousel = btn.closest('.carousel-header')?.nextElementSibling;
-                    if (carousel) {
-                        carousel.scrollBy({
-                            left: -300,
-                            behavior: 'smooth'
-                        });
-                    }
-                });
-            });
-
-            document.querySelectorAll('.next').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const carousel = btn.closest('.carousel-header')?.nextElementSibling;
-                    if (carousel) {
-                        carousel.scrollBy({
-                            left: 300,
-                            behavior: 'smooth'
-                        });
-                    }
-                });
-            });
-
-            // Refresh attendance
-            const refreshAttendance = document.getElementById('refreshAttendance');
-            if (refreshAttendance) refreshAttendance.addEventListener('click', loadAttendanceData);
-
-            // Tab navigation
-            document.querySelectorAll('.tab-item').forEach(tab => {
-                tab.addEventListener('click', () => {
-                    const tabId = tab.getAttribute('data-tab');
-
-                    document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
-                    tab.classList.add('active');
-
-                    document.querySelectorAll('.tab-content').forEach(content => {
-                        content.classList.remove('active');
-                    });
-                    const targetContent = document.getElementById(tabId);
-                    if (targetContent) {
-                        targetContent.classList.add('active');
-                    }
-                });
-
-                // Add keyboard support
-                tab.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        tab.click();
-                    }
-                });
-            });
-
-            // Copy invitation link
-            const copyInviteLink = document.getElementById('copyInviteLink');
-            if (copyInviteLink) copyInviteLink.addEventListener('click', copyInvitationLink);
-
-            // Section management
-            const closeSectionManagement = document.getElementById('closeSectionManagement');
-            if (closeSectionManagement) closeSectionManagement.addEventListener('click', closeAllModals);
-
-            // Edit section
-            const cancelEditSection = document.getElementById('cancelEditSection');
-            const updateSection = document.getElementById('updateSection');
-            if (cancelEditSection) cancelEditSection.addEventListener('click', closeAllModals);
-            if (updateSection) updateSection.addEventListener('click', updateSectionData);
-
-            // Delete section
-            const cancelDeleteSection = document.getElementById('cancelDeleteSection');
-            const confirmDeleteSection = document.getElementById('confirmDeleteSection');
-            if (cancelDeleteSection) cancelDeleteSection.addEventListener('click', closeAllModals);
-            if (confirmDeleteSection) confirmDeleteSection.addEventListener('click', deleteSectionData);
-
-            // Section students
-            const closeSectionStudents = document.getElementById('closeSectionStudents');
-            if (closeSectionStudents) closeSectionStudents.addEventListener('click', closeAllModals);
-
-            // Section invitation
-            const closeSectionInvitation = document.getElementById('closeSectionInvitation');
-            const copySectionInviteLink = document.getElementById('copySectionInviteLink');
-            if (closeSectionInvitation) closeSectionInvitation.addEventListener('click', closeAllModals);
-            if (copySectionInviteLink) copySectionInviteLink.addEventListener('click', copySectionInvitationLink);
-
-            // Section enrollment
-            const cancelEnrollment = document.getElementById('cancelEnrollment');
-            const confirmEnrollment = document.getElementById('confirmEnrollment');
-            if (cancelEnrollment) cancelEnrollment.addEventListener('click', closeAllModals);
-            if (confirmEnrollment) confirmEnrollment.addEventListener('click', enrollInSection);
-        }
-
-        // Page Navigation
-        function switchPage(page) {
-            elements.pages.forEach(p => p.classList.remove('active'));
-            const targetPage = document.getElementById(page);
-            if (targetPage) {
-                targetPage.classList.add('active');
-            }
-
-            const pageTitles = {
-                dashboard: 'Dashboard',
-                sections: 'My Sections',
-                attendance: 'Attendance',
-                students: 'Students',
-                reports: 'Reports',
-                location: 'Location Settings',
-                settings: 'Settings'
+            const userData = {
+                name: user.displayName || document.getElementById('signupName')?.value || 'User',
+                pronouns: document.getElementById('signupPronouns')?.value || '',
+                role: document.getElementById('signupRole')?.value || 'student',
+                avatar: profileEmoji,
+                color: identityColor,
+                joinDate: new Date().toISOString(),
+                dob: document.getElementById('signupDob')?.value || '',
+                settings: appState.settings,
+                privacy: {
+                    trackingConsent: appState.privacy.trackingConsent || 'essential',
+                    dataSharing: false
+                },
+                nearId: {
+                    identityColor: identityColor,
+                    profileEmoji: profileEmoji,
+                    lastEmojiChange: new Date().toISOString()
+                },
+                lastActive: new Date().toISOString(),
+                deviceId: appState.security.deviceId
             };
 
-            if (elements.headerTitle) {
-                elements.headerTitle.textContent = pageTitles[page] || 'Dashboard';
+            await db.collection('users').doc(user.uid).set(userData);
+            appState.currentUser = {
+                id: user.uid,
+                email: user.email,
+                ...userData
+            };
+            appState.nearId = userData.nearId;
+        }
+
+        // Initialize NearID for existing users
+        async function initializeUserNearID(userId) {
+            const identityColor = getRandomColor();
+            const profileEmoji = getInitials(appState.currentUser?.name || 'User');
+
+            const nearIdData = {
+                identityColor: identityColor,
+                profileEmoji: profileEmoji,
+                lastEmojiChange: new Date().toISOString()
+            };
+
+            await db.collection('users').doc(userId).update({
+                nearId: nearIdData
+            });
+
+            appState.nearId = nearIdData;
+        }
+
+        // Initialize NearID+ identity system
+        function initializeNearID() {
+            appState.security.nearId = {
+                userId: appState.currentUser.id,
+                deviceId: appState.security.deviceId,
+                sessionKey: generateSessionKey(),
+                timestamp: Date.now()
+            };
+
+            sessionStorage.setItem('nearId', JSON.stringify(appState.security.nearId));
+        }
+
+        // Generate session key
+        function generateSessionKey() {
+            return 'sk_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        }
+
+        // Setup service worker
+        function setupServiceWorker() {
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => {
+                        console.log('SW registered: ', registration);
+                    })
+                    .catch(registrationError => {
+                        console.log('SW registration failed: ', registrationError);
+                    });
             }
-            state.currentPage = page;
+        }
+
+        // Setup session management
+        function setupSessionManagement() {
+            document.addEventListener('mousemove', resetSessionTimer);
+            document.addEventListener('keypress', resetSessionTimer);
+            document.addEventListener('click', resetSessionTimer);
+            document.addEventListener('scroll', resetSessionTimer);
+            startSessionTimer();
+        }
+
+        function resetSessionTimer() {
+            appState.security.lastActivity = Date.now();
+        }
+
+        function startSessionTimer() {
+            setInterval(() => {
+                const inactiveTime = Date.now() - appState.security.lastActivity;
+                if (inactiveTime > appState.security.sessionTimeout - 60000) {
+                    showSessionTimeoutWarning();
+                }
+            }, 30000);
+        }
+
+        function showSessionTimeoutWarning() {
+            let timeLeft = 60;
+            const countdownElement = document.getElementById('sessionCountdown');
+
+            elements.sessionTimeoutModal.style.display = 'flex';
+
+            const countdown = setInterval(() => {
+                timeLeft--;
+                countdownElement.textContent = `0:${timeLeft < 10 ? '0' : ''}${timeLeft}`;
+
+                if (timeLeft <= 0) {
+                    clearInterval(countdown);
+                    logoutUser();
+                }
+            }, 1000);
+
+            elements.extendSessionButton.onclick = () => {
+                clearInterval(countdown);
+                resetSessionTimer();
+                elements.sessionTimeoutModal.style.display = 'none';
+            };
+        }
+
+        // Initialize privacy settings
+        function initializePrivacySettings() {
+            const savedSettings = localStorage.getItem('privacySettings');
+            if (savedSettings) {
+                const settings = JSON.parse(savedSettings);
+                appState.privacy = {
+                    ...appState.privacy,
+                    ...settings
+                };
+            }
+        }
+
+        // Initialize accessibility features
+        function initializeAccessibility() {
+            const savedSettings = localStorage.getItem('accessibilitySettings');
+            if (savedSettings) {
+                const settings = JSON.parse(savedSettings);
+                appState.settings = {
+                    ...appState.settings,
+                    ...settings
+                };
+                applyAccessibilitySettings();
+            }
+        }
+
+        function applyAccessibilitySettings() {
+            const root = document.documentElement;
+
+            if (appState.settings.highContrast) {
+                root.style.setProperty('--primary', '#000000');
+                root.style.setProperty('--on-primary', '#FFFFFF');
+                root.style.setProperty('--outline', '#000000');
+                root.style.setProperty('--surface', '#FFFFFF');
+                root.style.setProperty('--on-surface', '#000000');
+            } else {
+                root.style.setProperty('--primary', '#6750A4');
+                root.style.setProperty('--on-primary', '#FFFFFF');
+                root.style.setProperty('--outline', '#79747E');
+                root.style.setProperty('--surface', '#FEF7FF');
+                root.style.setProperty('--on-surface', '#1D1B20');
+            }
+
+            if (appState.settings.largeText) {
+                root.style.setProperty('--font-size-md', '18px');
+                root.style.setProperty('--font-size-lg', '20px');
+                root.style.setProperty('--font-size-xl', '22px');
+                root.style.setProperty('--font-size-xxl', '24px');
+            } else {
+                root.style.setProperty('--font-size-md', '16px');
+                root.style.setProperty('--font-size-lg', '18px');
+                root.style.setProperty('--font-size-xl', '20px');
+                root.style.setProperty('--font-size-xxl', '22px');
+            }
+
+            if (appState.settings.reduceMotion) {
+                root.style.setProperty('--transition-speed', '0ms');
+                root.style.setProperty('--animation-speed', '0ms');
+            } else {
+                root.style.setProperty('--transition-speed', '200ms');
+                root.style.setProperty('--animation-speed', '300ms');
+            }
+
+            if (appState.settings.dyslexiaFont) {
+                document.body.style.fontFamily = "'OpenDyslexic', 'Comic Sans MS', sans-serif";
+            } else {
+                document.body.style.fontFamily = "'Roboto', 'Segoe UI', system-ui, sans-serif";
+            }
+        }
+
+        function saveAccessibilitySettings() {
+            localStorage.setItem('accessibilitySettings', JSON.stringify({
+                highContrast: appState.settings.highContrast,
+                largeText: appState.settings.largeText,
+                reduceMotion: appState.settings.reduceMotion,
+                dyslexiaFont: appState.settings.dyslexiaFont,
+                voiceCommands: appState.settings.voiceCommands,
+                hapticFeedback: appState.settings.hapticFeedback,
+                analyticsEnabled: appState.settings.analyticsEnabled
+            }));
+        }
+
+        // Set up event listeners
+        function setupEventListeners() {
+            elements.showSignIn.addEventListener('click', () => {
+                showAuth();
+                showLoginForm();
+            });
+
+            elements.showSignUp.addEventListener('click', () => {
+                showAuth();
+                showSignupForm();
+            });
+
+            elements.loginForm.addEventListener('submit', handleLogin);
+            elements.signupForm.addEventListener('submit', handleSignup);
+            elements.resetForm.addEventListener('submit', handlePasswordReset);
+            elements.authToggle.addEventListener('click', toggleAuthForms);
+            elements.authBackButton.addEventListener('click', showLanding);
+            elements.resetBackButton.addEventListener('click', showAuth);
+            elements.backToLogin.addEventListener('click', showAuth);
+            elements.forgotPassword.addEventListener('click', () => {
+                showResetPassword();
+            });
+            
+            document.getElementById('togglePassword').addEventListener('click', togglePasswordVisibility);
+
+            elements.navItems.forEach(item => {
+                item.addEventListener('click', () => {
+                    const page = item.getAttribute('data-page');
+                    loadPage(page);
+                    elements.navItems.forEach(nav => nav.classList.remove('active'));
+                    item.classList.add('active');
+                });
+            });
+
+            elements.fabButton.addEventListener('click', handleFabClick);
+
+            elements.modalBackdrop.addEventListener('click', (e) => {
+                if (e.target === elements.modalBackdrop) {
+                    closeModal();
+                }
+            });
+
+            elements.fullscreenBackButton.addEventListener('click', closeFullscreen);
+            elements.fullscreenClose.addEventListener('click', closeFullscreen);
+
+            elements.menuButton.addEventListener('click', openNavigationDrawer);
+            elements.searchButton.addEventListener('click', openFullscreenSearch);
+            elements.notificationsButton.addEventListener('click', openFullscreenNotifications);
+            elements.profileButton.addEventListener('click', () => loadPage('profile'));
+
+            window.addEventListener('scroll', () => {
+                if (window.scrollY > 10) {
+                    elements.topAppBar.classList.add('scrolled');
+                } else {
+                    elements.topAppBar.classList.remove('scrolled');
+                }
+            });
+
+            window.addEventListener('online', handleOnlineStatus);
+            window.addEventListener('offline', handleOfflineStatus);
+
+            // Haptic feedback
+            if (appState.settings.hapticFeedback && 'vibrate' in navigator) {
+                document.addEventListener('click', (e) => {
+                    if (e.target.tagName === 'BUTTON' || e.target.closest('button')) {
+                        navigator.vibrate(10);
+                    }
+                });
+            }
+        }
+
+        // Show landing screen
+        function showLanding() {
+            elements.landingContainer.style.display = 'flex';
+            elements.authContainer.style.display = 'none';
+            elements.resetContainer.style.display = 'none';
+            elements.loadingContainer.style.display = 'none';
+            elements.appContainer.style.display = 'none';
+        }
+
+        // Show authentication screen
+        function showAuth() {
+            elements.landingContainer.style.display = 'none';
+            elements.authContainer.style.display = 'flex';
+            elements.resetContainer.style.display = 'none';
+            elements.loadingContainer.style.display = 'none';
+            elements.appContainer.style.display = 'none';
+        }
+
+        // Show reset password screen
+        function showResetPassword() {
+            elements.landingContainer.style.display = 'none';
+            elements.authContainer.style.display = 'none';
+            elements.resetContainer.style.display = 'flex';
+            elements.loadingContainer.style.display = 'none';
+            elements.appContainer.style.display = 'none';
+            
+            // Reset form state
+            document.getElementById('resetSubmitButton').textContent = 'Send Reset Email';
+            document.getElementById('resetCode').style.display = 'none';
+            document.getElementById('newPassword').style.display = 'none';
+            document.getElementById('confirmNewPassword').style.display = 'none';
+        }
+
+        // Show login form
+        function showLoginForm() {
+            elements.signupForm.style.display = 'none';
+            elements.loginForm.style.display = 'block';
+            elements.authToggleText.textContent = 'Don\'t have an account?';
+            elements.authToggle.textContent = 'Sign Up';
+        }
+
+        // Show signup form
+        function showSignupForm() {
+            elements.loginForm.style.display = 'none';
+            elements.signupForm.style.display = 'block';
+            elements.authToggleText.textContent = 'Already have an account?';
+            elements.authToggle.textContent = 'Sign In';
+        }
+
+        // Show loading screen
+        function showLoading() {
+            elements.landingContainer.style.display = 'none';
+            elements.authContainer.style.display = 'none';
+            elements.resetContainer.style.display = 'none';
+            elements.loadingContainer.style.display = 'flex';
+            elements.appContainer.style.display = 'none';
+        }
+
+        // Show main app
+        function showApp() {
+            elements.landingContainer.style.display = 'none';
+            elements.authContainer.style.display = 'none';
+            elements.resetContainer.style.display = 'none';
+            elements.loadingContainer.style.display = 'none';
+            elements.appContainer.style.display = 'flex';
+
+            loadPage('dashboard');
+            updateNotificationBadge();
+
+            setTimeout(() => {
+                showToast(`Welcome to NearCheck+, ${appState.currentUser.name}!`);
+            }, 1000);
+        }
+
+        // Handle login
+        async function handleLogin(e) {
+            e.preventDefault();
+
+            const email = sanitizeInput(document.getElementById('loginEmail').value);
+            const password = document.getElementById('loginPassword').value;
+            const rememberMe = document.getElementById('rememberMe').checked;
+
+            try {
+                showLoading();
+                await auth.setPersistence(rememberMe ?
+                    firebase.auth.Auth.Persistence.LOCAL :
+                    firebase.auth.Auth.Persistence.SESSION);
+
+                await auth.signInWithEmailAndPassword(email, password);
+            } catch (error) {
+                showAuth();
+                showToast(`Login failed: ${error.message}`);
+            }
+        }
+
+        // Handle password reset
+        async function handlePasswordReset(e) {
+            e.preventDefault();
+
+            const email = sanitizeInput(document.getElementById('resetEmail').value);
+            const code = document.getElementById('resetCode').value;
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmNewPassword').value;
+
+            if (!email) {
+                showToast('Please enter your email address');
+                return;
+            }
+
+            if (!validateEmail(email)) {
+                showToast('Please enter a valid email address');
+                return;
+            }
+
+            try {
+                // First stage: Send reset code
+                if (!code) {
+                    // Generate and store reset code
+                    appState.resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+                    
+                    // In production, you would send this via email
+                    // For demo, we'll just show it
+                    showToast(`Reset code sent to ${email}. Your code is: ${appState.resetCode}`);
+                    
+                    // Show code input and new password fields
+                    document.getElementById('resetCode').style.display = 'block';
+                    document.getElementById('newPassword').style.display = 'block';
+                    document.getElementById('confirmNewPassword').style.display = 'block';
+                    document.getElementById('resetSubmitButton').textContent = 'Reset Password';
+                    
+                    return;
+                }
+
+                // Second stage: Verify code and reset password
+                if (code !== appState.resetCode) {
+                    showToast('Invalid verification code');
+                    return;
+                }
+
+                if (!newPassword || newPassword.length < 6) {
+                    showToast('Password must be at least 6 characters');
+                    return;
+                }
+
+                if (newPassword !== confirmPassword) {
+                    showToast('Passwords do not match');
+                    return;
+                }
+
+                // Find user by email and update password
+                const user = await auth.signInWithEmailAndPassword(email, 'dummy');
+                await user.user.updatePassword(newPassword);
+                
+                showToast('Password reset successfully. Please login with your new password.');
+                showAuth();
+                showLoginForm();
+                
+            } catch (error) {
+                if (error.code === 'auth/user-not-found') {
+                    showToast('No account found with this email');
+                } else if (error.code === 'auth/wrong-password') {
+                    // This is expected when we try dummy login
+                    // Continue with password reset
+                } else {
+                    showToast(`Error: ${error.message}`);
+                }
+            }
+        }
+
+        // Handle signup
+        async function handleSignup(e) {
+            e.preventDefault();
+
+            const name = sanitizeInput(document.getElementById('signupName').value);
+            const pronouns = sanitizeInput(document.getElementById('signupPronouns').value);
+            const email = sanitizeInput(document.getElementById('signupEmail').value);
+            const password = document.getElementById('signupPassword').value;
+            const confirmPassword = document.getElementById('signupConfirmPassword').value;
+            const role = document.getElementById('signupRole').value;
+            const dob = document.getElementById('signupDob').value;
+            const termsAgreed = document.getElementById('termsAgreement').checked;
+
+            if (!validateEmail(email)) {
+                showToast('Please enter a valid email address');
+                return;
+            }
+
+            if (password !== confirmPassword) {
+                showToast('Passwords do not match');
+                return;
+            }
+
+            if (!termsAgreed) {
+                showToast('Please agree to the Terms of Service and Privacy Policy');
+                return;
+            }
+
+            const age = calculateAge(new Date(dob));
+            if (role === 'teacher' && age < 20) {
+                showToast('Teachers must be at least 20 years old');
+                return;
+            }
+            if (role === 'student' && age < 13) {
+                showToast('Students must be at least 13 years old');
+                return;
+            }
+
+            try {
+                showLoading();
+                const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+                const user = userCredential.user;
+
+                await user.updateProfile({
+                    displayName: name
+                });
+
+                showToast('Account created successfully!');
+
+            } catch (error) {
+                showAuth();
+                showToast(`Signup failed: ${error.message}`);
+            }
+        }
+
+        // Input sanitization
+        function sanitizeInput(input) {
+            if (!input) return '';
+            const div = document.createElement('div');
+            div.textContent = input;
+            return div.innerHTML.replace(/[<>]/g, '');
+        }
+
+        // Email validation
+        function validateEmail(email) {
+            const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            return re.test(email);
+        }
+
+        // Toggle password visibility
+        function togglePasswordVisibility() {
+            const passwordInput = document.getElementById('loginPassword');
+            const toggleButton = document.getElementById('togglePassword');
+
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                toggleButton.textContent = 'Hide Password';
+                toggleButton.setAttribute('aria-label', 'Hide password');
+            } else {
+                passwordInput.type = 'password';
+                toggleButton.textContent = 'Show Password';
+                toggleButton.setAttribute('aria-label', 'Show password');
+            }
+        }
+
+        // Toggle between login and signup forms
+        function toggleAuthForms(e) {
+            e.preventDefault();
+            if (elements.loginForm.style.display !== 'none') {
+                showSignupForm();
+            } else {
+                showLoginForm();
+            }
+        }
+
+        // Logout user
+        async function logoutUser() {
+            try {
+                if (appState.checkInStatus.autoCheckInInterval) {
+                    clearInterval(appState.checkInStatus.autoCheckInInterval);
+                }
+
+                if (voiceCommands.isInitialized) {
+                    voiceCommands.destroy();
+                }
+
+                await auth.signOut();
+                sessionStorage.clear();
+                showToast('Logged out successfully');
+                showLanding();
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+        }
+
+        // Handle online/offline status
+        function handleOnlineStatus() {
+            showToast('Connection restored');
+            if (appState.currentUser) {
+                loadPage(appState.currentPage);
+            }
+        }
+
+        function handleOfflineStatus() {
+            showToast('You are currently offline. Some features may be limited.');
+        }
+
+        // Update notification badge
+        function updateNotificationBadge() {
+            const unreadCount = appState.messages.filter(msg =>
+                !msg.read || (msg.read && !msg.read.includes(appState.currentUser.id))
+            ).length;
+
+            const badge = document.getElementById('notificationBadge');
+            if (unreadCount > 0) {
+                badge.textContent = unreadCount > 9 ? '9+' : unreadCount;
+                badge.style.display = 'flex';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+
+        // Load page content
+        function loadPage(page) {
+            appState.currentPage = page;
 
             switch (page) {
                 case 'dashboard':
-                    loadDashboardData();
+                    loadDashboard();
+                    trackFeatureUsage('dashboard');
                     break;
                 case 'sections':
-                    loadSectionsData();
+                    loadSections();
+                    trackFeatureUsage('sections');
                     break;
-                case 'attendance':
-                    loadAttendanceData();
+                case 'sessions':
+                    if (appState.currentUser.role === 'teacher') {
+                        loadSessions();
+                        trackFeatureUsage('sessions');
+                    } else {
+                        loadDashboard();
+                    }
                     break;
-                case 'reports':
-                    loadReportsData();
+                case 'messages':
+                    loadMessages();
+                    trackFeatureUsage('messages');
                     break;
+                case 'settings':
+                    loadSettings();
+                    break;
+                case 'profile':
+                    loadProfile();
+                    break;
+                default:
+                    loadDashboard();
             }
+
+            document.title = `${page.charAt(0).toUpperCase() + page.slice(1)} | NearCheck+`;
         }
 
-        // Sidebar Toggle
-        function toggleSidebar() {
-            if (elements.sidebar) {
-                elements.sidebar.classList.toggle('active');
-            }
-            if (elements.mainContent) {
-                elements.mainContent.classList.toggle('expanded');
-            }
-            state.sidebarOpen = !state.sidebarOpen;
-        }
+        // Load dashboard page
+        function loadDashboard() {
+            const greeting = getTimeBasedGreeting();
+            const today = new Date().toISOString().split('T')[0];
+            const todayAttendance = appState.attendanceData.filter(a =>
+                a.timestamp.split('T')[0] === today
+            );
 
-        // Dark Mode Toggle
-        function toggleDarkMode() {
-            const isDarkMode = document.getElementById('darkModeToggle').checked;
-            document.body.classList.toggle('dark-mode', isDarkMode);
-            state.darkMode = isDarkMode;
-
-            if (state.currentUser) {
-                db.collection('userPreferences').doc(state.currentUser.uid).set({
-                    darkMode: isDarkMode,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                }, {
-                    merge: true
-                }).catch(error => {
-                    console.error('Error saving dark mode preference:', error);
-                });
-            }
-        }
-
-        // Modal Controls
-        function openCreateSectionModal() {
-            if (elements.createSectionModal) {
-                elements.createSectionModal.classList.add('active');
-            }
-        }
-
-        function openSessionManagementModal(sectionId) {
-            const section = state.sections.find(s => s.id === sectionId);
-            if (!section || !elements.sessionManagementModal) return;
-
-            document.getElementById('sessionSectionName').textContent = section.name;
-            
-            const isSessionActive = SessionService.isSessionActive(sectionId);
-            const statusText = document.getElementById('sessionStatusText');
-            const startBtn = document.getElementById('startSessionBtn');
-            const stopBtn = document.getElementById('stopSessionBtn');
-            const pauseBtn = document.getElementById('pauseSessionBtn');
-            const description = document.getElementById('sessionDescription');
-            
-            if (isSessionActive) {
-                statusText.textContent = 'Session Active';
-                statusText.className = 'status-active';
-                startBtn.disabled = true;
-                stopBtn.disabled = false;
-                pauseBtn.disabled = false;
-                description.textContent = 'Session is currently active. Students can check in.';
-            } else {
-                statusText.textContent = 'Session Inactive';
-                statusText.className = 'status-inactive';
-                startBtn.disabled = false;
-                stopBtn.disabled = true;
-                pauseBtn.disabled = true;
-                description.textContent = 'Start a session to allow students to check in.';
-            }
-
-            state.selectedSection = section;
-            elements.sessionManagementModal.classList.add('active');
-        }
-
-        function openEditSectionModal(sectionId) {
-            const section = state.sections.find(s => s.id === sectionId);
-            if (!section || !elements.editSectionModal) return;
-
-            const editContent = document.getElementById('editSectionContent');
-            if (editContent) {
-                editContent.innerHTML = `
-                    <div class="form-group">
-                        <label class="form-label">Section Name</label>
-                        <input type="text" class="form-control" id="editSectionName" value="${section.name}">
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">Subject</label>
-                        <input type="text" class="form-control" id="editSectionSubject" value="${section.subject}">
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">Schedule</label>
-                        <input type="text" class="form-control" id="editSectionSchedule" value="${section.schedule}">
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">Session Duration</label>
-                        <select class="form-control" id="editSessionDuration">
-                            <option value="10" ${section.sessionDuration == 10 ? 'selected' : ''}>NearQuick (10m)</option>
-                            <option value="15" ${section.sessionDuration == 15 ? 'selected' : ''}>NearRegular (15m)</option>
-                            <option value="30" ${section.sessionDuration == 30 ? 'selected' : ''}>NearLong (30m)</option>
-                            <option value="custom" ${![10,15,30].includes(section.sessionDuration) ? 'selected' : ''}>NearCustom (custom)</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group" id="editCustomDurationContainer" style="${![10,15,30].includes(section.sessionDuration) ? 'display: block;' : 'display: none;'}">
-                        <label class="form-label">Custom Duration (minutes)</label>
-                        <input type="number" class="form-control" id="editCustomDuration" min="5" max="180" value="${section.sessionDuration}">
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">Location Radius</label>
-                        <select class="form-control" id="editSectionRadius">
-                            <option value="5" ${section.radius == 5 ? 'selected' : ''}>NearSnap (5m)</option>
-                            <option value="10" ${section.radius == 10 ? 'selected' : ''}>NearStandard (10m)</option>
-                            <option value="20" ${section.radius == 20 ? 'selected' : ''}>NearFlex (20m)</option>
-                            <option value="50" ${section.radius == 50 ? 'selected' : ''}>NearMax (50m)</option>
-                            <option value="custom" ${![5,10,20,50].includes(section.radius) ? 'selected' : ''}>Custom</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group" id="editSectionCustomRadiusContainer" style="${![5,10,20,50].includes(section.radius) ? 'display: block;' : 'display: none;'}">
-                        <label class="form-label">Custom Radius (meters)</label>
-                        <input type="number" class="form-control" id="editSectionCustomRadius" min="5" max="150" value="${section.radius}">
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">Section Emoji</label>
-                        <input type="text" class="form-control" id="editSectionEmoji" value="${section.emoji}">
-                    </div>
-
-                    <div class="form-group">
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-title">SilentScan Mode</div>
-                                <div class="setting-description">Prevent unauthorized detection of sessions</div>
-                            </div>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="editSilentScanToggle" ${section.silentScan ? 'checked' : ''}>
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-title">Online Check-in</div>
-                                <div class="setting-description">Allow students to check-in without location verification</div>
-                            </div>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="editSectionOnlineCheckinToggle" ${section.onlineCheckin ? 'checked' : ''}>
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-title">Auto Check-in</div>
-                                <div class="setting-description">Automatically check-in students within boundaries</div>
-                            </div>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="editSectionAutoCheckinToggle" ${section.autoCheckin ? 'checked' : ''}>
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-title">NearID+ Tracking</div>
-                                <div class="setting-description">Use device signatures for enhanced security</div>
-                            </div>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="editSectionNearIdToggle" ${section.nearIdTracking ? 'checked' : ''}>
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-title">Auto Session Management</div>
-                                <div class="setting-description">Automatically start and end sessions based on schedule</div>
-                            </div>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="editAutoSessionToggle" ${section.autoSession ? 'checked' : ''}>
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <input type="hidden" id="editSectionId" value="${section.id}">
-                `;
-
-                // Add event listeners for duration and radius changes
-                const editDurationSelect = document.getElementById('editSessionDuration');
-                const editRadiusSelect = document.getElementById('editSectionRadius');
+            let html = `
+                <div class="greeting">${greeting}, ${appState.currentUser.name}!</div>
                 
-                if (editDurationSelect) {
-                    editDurationSelect.addEventListener('change', function() {
-                        const customContainer = document.getElementById('editCustomDurationContainer');
-                        if (customContainer) {
-                            customContainer.style.display = this.value === 'custom' ? 'block' : 'none';
-                        }
-                    });
-                }
-                
-                if (editRadiusSelect) {
-                    editRadiusSelect.addEventListener('change', function() {
-                        const customContainer = document.getElementById('editSectionCustomRadiusContainer');
-                        if (customContainer) {
-                            customContainer.style.display = this.value === 'custom' ? 'block' : 'none';
-                        }
-                    });
-                }
-            }
-
-            state.selectedSection = section;
-            elements.editSectionModal.classList.add('active');
-        }
-
-        function openDeleteSectionModal(sectionId) {
-            const section = state.sections.find(s => s.id === sectionId);
-            if (!section || !elements.deleteSectionModal) return;
-
-            document.getElementById('deleteSectionName').textContent = section.name;
-            state.selectedSection = section;
-            elements.deleteSectionModal.classList.add('active');
-        }
-
-        function openSectionStudentsModal(sectionId) {
-            const section = state.sections.find(s => s.id === sectionId);
-            if (!section || !elements.sectionStudentsModal) return;
-
-            const studentsContent = document.getElementById('sectionStudentsContent');
-            if (studentsContent) {
-                let html = `<h3>Students in ${section.name}</h3>`;
-
-                if (!section.students || section.students.length === 0) {
-                    html += '<p>No students enrolled in this section yet.</p>';
-                } else {
-                    html += `
-                        <div style="overflow-x: auto;">
-                            <table class="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Name</th>
-                                        <th>Joined Date</th>
-                                        <th>Attendance Rate</th>
-                                        <th>Last Check-in</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                    `;
-
-                    // Get students for this section
-                    const studentPromises = section.students.map(studentId =>
-                        db.collection('users').doc(studentId).get()
-                    );
-
-                    Promise.all(studentPromises).then(studentDocs => {
-                        const enrolledStudents = studentDocs
-                            .filter(doc => doc.exists)
-                            .map(doc => ({
-                                id: doc.id,
-                                ...doc.data()
-                            }));
-
-                        // Get attendance data for these students
-                        const today = new Date();
-                        const thirtyDaysAgo = new Date(today.getTime() - (30 * 24 * 60 * 60 * 1000));
-
-                        db.collection('attendance')
-                            .where('sectionId', '==', sectionId)
-                            .where('timestamp', '>=', thirtyDaysAgo)
-                            .get()
-                            .then(snapshot => {
-                                const attendanceRecords = snapshot.docs.map(doc => ({
-                                    id: doc.id,
-                                    ...doc.data()
-                                }));
-
-                                enrolledStudents.forEach(student => {
-                                    const studentAttendance = attendanceRecords.filter(a => a.studentId === student.id);
-                                    const presentCount = studentAttendance.filter(a => a.status === 'present').length;
-                                    const totalCount = studentAttendance.length;
-                                    const attendanceRate = totalCount > 0 ? Math.round((presentCount / totalCount) * 100) : 0;
-
-                                    const lastCheckin = studentAttendance
-                                        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
-
-                                    html += `
-                                        <tr>
-                                            <td>${student.name}</td>
-                                            <td>${student.joinedAt ? new Date(student.joinedAt.toDate()).toLocaleDateString() : 'Unknown'}</td>
-                                            <td>${attendanceRate}%</td>
-                                            <td>${lastCheckin ? new Date(lastCheckin.timestamp).toLocaleDateString() : 'Never'}</td>
-                                            <td>
-                                                <button class="btn btn-sm btn-danger" onclick="removeStudentFromSection('${section.id}', '${student.id}')">
-                                                    <i class="fas fa-user-minus"></i>
-                                                    Remove
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    `;
-                                });
-
-                                html += `
-                                        </tbody>
-                                    </table>
-                                </div>
-                                `;
-                                studentsContent.innerHTML = html;
-                            });
-                    });
-                }
-
-                studentsContent.innerHTML = html;
-            }
-
-            state.selectedSection = section;
-            elements.sectionStudentsModal.classList.add('active');
-        }
-
-        function openSectionInvitationModal(sectionId) {
-            const section = state.sections.find(s => s.id === sectionId);
-            if (!section || !elements.sectionInvitationModal) return;
-
-            document.getElementById('sectionIdDisplay').value = section.id;
-            document.getElementById('sectionInvitationLink').value = `${window.location.origin}?section=${section.id}`;
-            state.selectedSection = section;
-            elements.sectionInvitationModal.classList.add('active');
-        }
-
-        function showSectionEnrollmentModal(sectionId) {
-            db.collection('sections').doc(sectionId).get()
-                .then(doc => {
-                    if (!doc.exists) {
-                        showToast('error', 'Invalid Section', 'The section you are trying to join does not exist');
-                        return;
-                    }
-
-                    const section = {
-                        id: doc.id,
-                        ...doc.data()
-                    };
-
-                    const enrollmentContent = document.getElementById('sectionEnrollmentContent');
-                    if (enrollmentContent) {
-                        enrollmentContent.innerHTML = `
-                            <div style="text-align: center; margin-bottom: 20px;">
-                                <div style="font-size: 48px; margin-bottom: 10px;">${section.emoji}</div>
-                                <h3 style="margin-bottom: 5px;">${section.name}</h3>
-                                <p style="color: var(--text-secondary); margin-bottom: 10px;">${section.subject}</p>
-                                <p><strong>Teacher:</strong> ${section.teacherName}</p>
-                                <p><strong>Created:</strong> ${section.createdAt ? new Date(section.createdAt.toDate()).toLocaleDateString() : 'Unknown'}</p>
-                                <p><strong>Schedule:</strong> ${section.schedule}</p>
-                                <p><strong>Location Radius:</strong> ${section.radius}m</p>
-                                ${section.updates && section.updates.length > 0 ? 
-                                    `<div style="background: var(--warning-light); padding: 10px; border-radius: 8px; margin-top: 15px;">
-                                        <p><strong>Update Available:</strong> ${section.updates[section.updates.length - 1]}</p>
-                                    </div>` : ''}
-                            </div>
-                            <input type="hidden" id="enrollmentSectionId" value="${section.id}">
-                        `;
-                    }
-
-                    state.selectedSection = section;
-                    elements.sectionEnrollmentModal.classList.add('active');
-                })
-                .catch(error => {
-                    showToast('error', 'Error', 'Failed to load section information');
-                });
-        }
-
-        function openCheckinModal(sectionId) {
-            const section = state.sections.find(s => s.id === sectionId);
-            if (!section || !elements.checkinModal) return;
-
-            state.selectedSection = section;
-            const checkinContent = document.getElementById('checkinContent');
-            if (checkinContent) {
-                checkinContent.innerHTML = `
-                    <div style="text-align: center; margin-bottom: 20px;">
-                        <div style="font-size: 48px; margin-bottom: 10px;">${section.emoji}</div>
-                        <h3 style="margin-bottom: 5px;">${section.name}</h3>
-                        <p style="color: var(--text-secondary); margin-bottom: 20px;">${section.subject}</p>
+                <div class="card">
+                    <div class="card-header">
+                        <span class="material-icons" style="margin-right: 12px; color: var(--primary);">dashboard</span>
+                        <div class="card-title">Today's Overview</div>
                     </div>
-                    
-                    ${section.onlineCheckin ? `
-                    <div class="checkin-options">
-                        <h4>Check-in Methods</h4>
-                        <div class="checkin-option" onclick="processOnlineCheckin('${section.id}')">
-                            <div class="checkin-option-icon">
-                                <i class="fas fa-wifi"></i>
-                            </div>
-                            <div class="checkin-option-info">
-                                <div class="checkin-option-title">Online Check-in</div>
-                                <div class="checkin-option-description">Check in without location verification</div>
-                            </div>
+                    <div style="display: flex; justify-content: space-between; margin-top: 16px;">
+                        <div class="stat">
+                            <div class="stat-value">${appState.sections.filter(s => s.active).length}</div>
+                            <div class="stat-label">Active Sections</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-value">${appState.sections.reduce((acc, section) => acc + (section.students ? section.students.length : 0), 0)}</div>
+                            <div class="stat-label">Total Students</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-value">${todayAttendance.length}</div>
+                            <div class="stat-label">Today's Check-ins</div>
                         </div>
                     </div>
-                    ` : ''}
-                    
-                    <div id="checkinStatus">
-                        <div class="spinner"></div>
-                        <p style="text-align: center; margin-top: 10px;">Validating your location...</p>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <span class="material-icons" style="margin-right: 12px; color: var(--primary);">class</span>
+                        <div class="card-title">Your Sections</div>
                     </div>
-                `;
-            }
-
-            elements.checkinModal.classList.add('active');
-
-            // Only validate location if online check-in is not enabled or if user wants location-based check-in
-            if (!section.onlineCheckin) {
-                validateCheckinLocation(section);
-            }
-        }
-
-        function openJoinSectionModal() {
-            if (elements.joinSectionModal) {
-                elements.joinSectionModal.classList.add('active');
-            }
-        }
-
-        function openManualAttendanceModal() {
-            const sectionSelect = document.getElementById('manualAttendanceSection');
-            if (!sectionSelect) return;
-
-            sectionSelect.innerHTML = '<option value="">Select a section</option>';
-
-            state.sections.forEach(section => {
-                const option = document.createElement('option');
-                option.value = section.id;
-                option.textContent = section.name;
-                sectionSelect.appendChild(option);
-            });
-
-            sectionSelect.addEventListener('change', function() {
-                const studentSelect = document.getElementById('manualAttendanceStudent');
-                if (!studentSelect) return;
-
-                studentSelect.innerHTML = '<option value="">Select a student</option>';
-
-                const sectionId = this.value;
-                if (!sectionId) return;
-
-                const section = state.sections.find(s => s.id === sectionId);
-
-                if (section && section.students) {
-                    // Get student details for this section
-                    const studentPromises = section.students.map(studentId =>
-                        db.collection('users').doc(studentId).get()
-                    );
-
-                    Promise.all(studentPromises).then(studentDocs => {
-                        studentDocs.forEach(doc => {
-                            if (doc.exists) {
-                                const student = doc.data();
-                                const option = document.createElement('option');
-                                option.value = doc.id;
-                                option.textContent = student.name;
-                                studentSelect.appendChild(option);
-                            }
-                        });
-                    });
-                }
-            });
-
-            if (elements.manualAttendanceModal) {
-                elements.manualAttendanceModal.classList.add('active');
-            }
-        }
-
-        function openBLECheckinModal() {
-            const sectionSelect = document.getElementById('bleCheckinSection');
-            if (sectionSelect) {
-                sectionSelect.innerHTML = '<option value="">Select a section</option>';
-
-                const enrolledSections = state.sections.filter(section =>
-                    section.students && section.students.includes(state.currentUser.uid)
-                );
-
-                enrolledSections.forEach(section => {
-                    const option = document.createElement('option');
-                    option.value = section.id;
-                    option.textContent = section.name;
-                    sectionSelect.appendChild(option);
-                });
-            }
-
-            const devicesList = document.getElementById('bleDevicesList');
-            if (devicesList) {
-                devicesList.innerHTML = '<option value="">No devices scanned</option>';
-                devicesList.disabled = true;
-            }
-
-            const confirmBleCheckin = document.getElementById('confirmBleCheckin');
-            if (confirmBleCheckin) {
-                confirmBleCheckin.disabled = true;
-            }
-
-            if (elements.bleCheckinModal) {
-                elements.bleCheckinModal.classList.add('active');
-            }
-        }
-
-        function openManualCheckinOptionsModal() {
-            if (elements.manualCheckinOptionsModal) {
-                elements.manualCheckinOptionsModal.classList.add('active');
-            }
-        }
-
-        function closeAllModals() {
-            document.querySelectorAll('.modal-overlay').forEach(modal => {
-                modal.classList.remove('active');
-            });
-            state.selectedSection = null;
-        }
-
-        // Session Management Functions
-        function startSession() {
-            if (!state.selectedSection) return;
-            
-            const durationSelect = document.getElementById('sessionDurationSelect');
-            const customDurationInput = document.getElementById('sessionCustomDuration');
-            
-            let duration = parseInt(durationSelect.value);
-            if (durationSelect.value === 'custom') {
-                duration = parseInt(customDurationInput.value);
-            }
-            
-            if (isNaN(duration) || duration < 5 || duration > 180) {
-                showToast('error', 'Invalid Duration', 'Please enter a valid duration between 5 and 180 minutes');
-                return;
-            }
-            
-            SessionService.startSession(state.selectedSection.id, duration)
-                .then(sessionId => {
-                    showToast('success', 'Session Started', `Session started for ${state.selectedSection.name}`);
-                    
-                    // Update UI
-                    const statusText = document.getElementById('sessionStatusText');
-                    const startBtn = document.getElementById('startSessionBtn');
-                    const stopBtn = document.getElementById('stopSessionBtn');
-                    const pauseBtn = document.getElementById('pauseSessionBtn');
-                    const description = document.getElementById('sessionDescription');
-                    
-                    statusText.textContent = 'Session Active';
-                    statusText.className = 'status-active';
-                    startBtn.disabled = true;
-                    stopBtn.disabled = false;
-                    pauseBtn.disabled = false;
-                    description.textContent = 'Session is currently active. Students can check in.';
-                    
-                    // Update section carousel
-                    loadSectionsData();
-                })
-                .catch(error => {
-                    showToast('error', 'Session Start Failed', error.message);
-                });
-        }
-
-        function stopSession() {
-            if (!state.selectedSection) return;
-            
-            SessionService.stopSession(state.selectedSection.id)
-                .then(() => {
-                    showToast('success', 'Session Stopped', `Session stopped for ${state.selectedSection.name}`);
-                    
-                    // Update UI
-                    const statusText = document.getElementById('sessionStatusText');
-                    const startBtn = document.getElementById('startSessionBtn');
-                    const stopBtn = document.getElementById('stopSessionBtn');
-                    const pauseBtn = document.getElementById('pauseSessionBtn');
-                    const description = document.getElementById('sessionDescription');
-                    
-                    statusText.textContent = 'Session Inactive';
-                    statusText.className = 'status-inactive';
-                    startBtn.disabled = false;
-                    stopBtn.disabled = true;
-                    pauseBtn.disabled = true;
-                    description.textContent = 'Start a session to allow students to check in.';
-                    
-                    // Update section carousel
-                    loadSectionsData();
-                })
-                .catch(error => {
-                    showToast('error', 'Session Stop Failed', error.message);
-                });
-        }
-
-        function pauseSession() {
-            if (!state.selectedSection) return;
-            
-            SessionService.pauseSession(state.selectedSection.id)
-                .then(() => {
-                    showToast('success', 'Session Paused', `Session paused for ${state.selectedSection.name}`);
-                    
-                    // Update UI
-                    const statusText = document.getElementById('sessionStatusText');
-                    const pauseBtn = document.getElementById('pauseSessionBtn');
-                    
-                    statusText.textContent = 'Session Paused';
-                    statusText.className = 'status-warning';
-                    pauseBtn.textContent = 'Resume Session';
-                    pauseBtn.onclick = resumeSession;
-                })
-                .catch(error => {
-                    showToast('error', 'Session Pause Failed', error.message);
-                });
-        }
-
-        function resumeSession() {
-            if (!state.selectedSection) return;
-            
-            SessionService.resumeSession(state.selectedSection.id)
-                .then(() => {
-                    showToast('success', 'Session Resumed', `Session resumed for ${state.selectedSection.name}`);
-                    
-                    // Update UI
-                    const statusText = document.getElementById('sessionStatusText');
-                    const pauseBtn = document.getElementById('pauseSessionBtn');
-                    
-                    statusText.textContent = 'Session Active';
-                    statusText.className = 'status-active';
-                    pauseBtn.textContent = 'Pause Session';
-                    pauseBtn.onclick = pauseSession;
-                })
-                .catch(error => {
-                    showToast('error', 'Session Resume Failed', error.message);
-                });
-        }
-
-        // Section Management Functions
-        function createSection() {
-            const name = document.getElementById('sectionName')?.value;
-            const subject = document.getElementById('sectionSubject')?.value;
-            const schedule = document.getElementById('sectionSchedule')?.value;
-            const durationType = document.getElementById('sessionDuration')?.value;
-            const customDuration = document.getElementById('customDuration')?.value;
-            const duration = durationType === 'custom' ? parseInt(customDuration) : parseInt(durationType);
-            const radiusType = document.getElementById('sectionRadius')?.value;
-            const customRadius = document.getElementById('sectionCustomRadius')?.value;
-            const radius = radiusType === 'custom' ? parseInt(customRadius) : parseInt(radiusType);
-            const emoji = document.getElementById('sectionEmoji')?.value;
-            const silentScan = document.getElementById('silentScanToggle')?.checked || false;
-            const onlineCheckin = document.getElementById('sectionOnlineCheckinToggle')?.checked || false;
-            const autoCheckin = document.getElementById('sectionAutoCheckinToggle')?.checked || false;
-            const nearIdTracking = document.getElementById('sectionNearIdToggle')?.checked || false;
-            const autoSession = document.getElementById('autoSessionToggle')?.checked || false;
-
-            if (!name || !subject || !schedule) {
-                showToast('error', 'Validation Error', 'Please fill in all required fields');
-                return;
-            }
-
-            if (isNaN(duration) || duration < 5 || duration > 180) {
-                showToast('error', 'Validation Error', 'Please enter a valid duration between 5 and 180 minutes');
-                return;
-            }
-
-            if (isNaN(radius) || radius < 10) {
-                showToast('error', 'Validation Error', 'Please enter a valid radius (minimum 10 meters)');
-                return;
-            }
-
-            LocationService.getCurrentLocation()
-                .then(location => {
-                    const sectionData = {
-                        name,
-                        subject,
-                        schedule,
-                        sessionDuration: duration,
-                        radius,
-                        emoji,
-                        location: {
-                            latitude: location.latitude,
-                            longitude: location.longitude
-                        },
-                        isActive: true,
-                        teacherId: state.currentUser.uid,
-                        teacherName: state.userData.name,
-                        silentScan,
-                        onlineCheckin,
-                        autoCheckin,
-                        nearIdTracking,
-                        autoSession,
-                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                        students: [],
-                        updates: []
-                    };
-
-                    return db.collection('sections').add(sectionData);
-                })
-                .then((docRef) => {
-                    showToast('success', 'Section Created', `${name} has been created successfully`);
-                    closeAllModals();
-                    loadSections();
-
-                    const createSectionForm = document.getElementById('createSectionForm');
-                    if (createSectionForm) createSectionForm.reset();
-                })
-                .catch(error => {
-                    showToast('error', 'Creation Failed', error.message);
-                });
-        }
-
-        function updateSectionData() {
-            const sectionId = document.getElementById('editSectionId')?.value;
-            const name = document.getElementById('editSectionName')?.value;
-            const subject = document.getElementById('editSectionSubject')?.value;
-            const schedule = document.getElementById('editSectionSchedule')?.value;
-            const durationType = document.getElementById('editSessionDuration')?.value;
-            const customDuration = document.getElementById('editCustomDuration')?.value;
-            const duration = durationType === 'custom' ? parseInt(customDuration) : parseInt(durationType);
-            const radiusType = document.getElementById('editSectionRadius')?.value;
-            const customRadius = document.getElementById('editSectionCustomRadius')?.value;
-            const radius = radiusType === 'custom' ? parseInt(customRadius) : parseInt(radiusType);
-            const emoji = document.getElementById('editSectionEmoji')?.value;
-            const silentScan = document.getElementById('editSilentScanToggle')?.checked || false;
-            const onlineCheckin = document.getElementById('editSectionOnlineCheckinToggle')?.checked || false;
-            const autoCheckin = document.getElementById('editSectionAutoCheckinToggle')?.checked || false;
-            const nearIdTracking = document.getElementById('editSectionNearIdToggle')?.checked || false;
-            const autoSession = document.getElementById('editAutoSessionToggle')?.checked || false;
-
-            if (!sectionId || !name || !subject || !schedule) {
-                showToast('error', 'Validation Error', 'Please fill in all required fields');
-                return;
-            }
-
-            if (isNaN(duration) || duration < 5 || duration > 180) {
-                showToast('error', 'Validation Error', 'Please enter a valid duration between 5 and 180 minutes');
-                return;
-            }
-
-            if (isNaN(radius) || radius < 10) {
-                showToast('error', 'Validation Error', 'Please enter a valid radius (minimum 10 meters)');
-                return;
-            }
-
-            const updateData = {
-                name,
-                subject,
-                schedule,
-                sessionDuration: duration,
-                radius,
-                emoji,
-                silentScan,
-                onlineCheckin,
-                autoCheckin,
-                nearIdTracking,
-                autoSession,
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            };
-
-            // Add update notification if certain settings changed
-            const section = state.sections.find(s => s.id === sectionId);
-            if (section) {
-                const updates = [];
-
-                if (section.name !== name) {
-                    updates.push(`Section name changed to "${name}"`);
-                }
-                if (section.schedule !== schedule) {
-                    updates.push(`Schedule updated to "${schedule}"`);
-                }
-                if (section.radius !== radius) {
-                    updates.push(`Location radius changed to ${radius}m`);
-                }
-                if (section.sessionDuration !== duration) {
-                    updates.push(`Session duration changed to ${duration} minutes`);
-                }
-
-                if (updates.length > 0) {
-                    updateData.updates = [...(section.updates || []), ...updates];
-                    updateData.lastUpdate = new Date();
-                }
-            }
-
-            db.collection('sections').doc(sectionId).update(updateData)
-                .then(() => {
-                    showToast('success', 'Section Updated', `${name} has been updated successfully`);
-                    closeAllModals();
-                    loadSections();
-                })
-                .catch(error => {
-                    showToast('error', 'Update Failed', error.message);
-                });
-        }
-
-        function deleteSectionData() {
-            const section = state.selectedSection;
-            if (!section) return;
-
-            db.collection('sections').doc(section.id).delete()
-                .then(() => {
-                    // Also delete attendance records for this section
-                    const attendanceQuery = db.collection('attendance')
-                        .where('sectionId', '==', section.id);
-
-                    return attendanceQuery.get().then(snapshot => {
-                        const batch = db.batch();
-                        snapshot.docs.forEach(doc => {
-                            batch.delete(doc.ref);
-                        });
-                        return batch.commit();
-                    });
-                })
-                .then(() => {
-                    showToast('success', 'Section Deleted', `${section.name} has been deleted successfully`);
-                    closeAllModals();
-                    loadSections();
-                })
-                .catch(error => {
-                    showToast('error', 'Deletion Failed', error.message);
-                });
-        }
-
-        function removeStudentFromSection(sectionId, studentId) {
-            const section = state.sections.find(s => s.id === sectionId);
-            if (!section || !section.students) return;
-
-            const updatedStudents = section.students.filter(id => id !== studentId);
-
-            db.collection('sections').doc(sectionId).update({
-                    students: updatedStudents
-                })
-                .then(() => {
-                    showToast('success', 'Student Removed', 'Student has been removed from the section');
-                    openSectionStudentsModal(sectionId); // Refresh the modal
-                    loadSections();
-                })
-                .catch(error => {
-                    showToast('error', 'Removal Failed', error.message);
-                });
-        }
-
-        function enrollInSection() {
-            const sectionId = document.getElementById('enrollmentSectionId')?.value;
-            if (!sectionId) return;
-
-            db.collection('sections').doc(sectionId).get()
-                .then(doc => {
-                    if (!doc.exists) {
-                        throw new Error('Section not found');
-                    }
-
-                    const section = doc.data();
-
-                    if (section.students && section.students.includes(state.currentUser.uid)) {
-                        throw new Error('You are already enrolled in this section');
-                    }
-
-                    const updatedStudents = section.students ? [...section.students, state.currentUser.uid] : [state.currentUser.uid];
-
-                    return db.collection('sections').doc(sectionId).update({
-                        students: updatedStudents
-                    });
-                })
-                .then(() => {
-                    // Record join date for student
-                    return db.collection('users').doc(state.currentUser.uid).update({
-                        joinedAt: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                })
-                .then(() => {
-                    showToast('success', 'Enrollment Successful', 'You have been enrolled in the section');
-                    closeAllModals();
-                    loadSections();
-                })
-                .catch(error => {
-                    showToast('error', 'Enrollment Failed', error.message);
-                });
-        }
-
-        function copySectionInvitationLink() {
-            const linkInput = document.getElementById('sectionInvitationLink');
-            if (!linkInput) return;
-
-            linkInput.select();
-            linkInput.setSelectionRange(0, 99999);
-
-            navigator.clipboard.writeText(linkInput.value)
-                .then(() => {
-                    showToast('success', 'Link Copied', 'Invitation link copied to clipboard');
-                })
-                .catch(() => {
-                    document.execCommand('copy');
-                    showToast('success', 'Link Copied', 'Invitation link copied to clipboard');
-                });
-        }
-
-        // Toast Notification System
-        function showToast(type, title, message, duration = 5000) {
-            const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
-            toast.setAttribute('role', 'alert');
-            toast.setAttribute('aria-live', 'assertive');
-            toast.setAttribute('aria-atomic', 'true');
-
-            const icons = {
-                success: 'fa-check-circle',
-                error: 'fa-exclamation-circle',
-                warning: 'fa-exclamation-triangle',
-                info: 'fa-info-circle'
-            };
-
-            toast.innerHTML = `
-                <div class="toast-icon ${type}">
-                    <i class="fas ${icons[type] || 'fa-info-circle'}"></i>
-                </div>
-                <div class="toast-content">
-                    <div class="toast-title">${title}</div>
-                    <div class="toast-message">${message}</div>
-                </div>
-                <button class="toast-close" aria-label="Close notification">
-                    <i class="fas fa-times"></i>
-                </button>
+                    <div class="sections-grid">
             `;
 
-            if (elements.toastContainer) {
-                elements.toastContainer.appendChild(toast);
-            }
+            if (appState.sections.length === 0) {
+                html += `
+                    <div style="text-align: center; padding: 32px; width: 100%; color: var(--on-surface-variant);">
+                        <span class="material-icons" style="font-size: 48px; margin-bottom: 16px; opacity: 0.5;">class</span>
+                        <div>No sections yet. ${appState.currentUser.role === 'teacher' ? 'Create your first section!' : 'Join a section to get started!'}</div>
+                    </div>
+                `;
+            } else {
+                appState.sections.forEach(section => {
+                    const sessionActive = section.active && section.currentSession;
+                    const studentCount = section.students ? section.students.length : 0;
+                    const plusPoints = appState.plusPoints[section.id] || 0;
 
-            setTimeout(() => {
-                toast.classList.add('show');
-            }, 100);
-
-            const closeBtn = toast.querySelector('.toast-close');
-            if (closeBtn) {
-                closeBtn.addEventListener('click', () => {
-                    hideToast(toast);
-                });
-            }
-
-            if (duration > 0) {
-                setTimeout(() => {
-                    hideToast(toast);
-                }, duration);
-            }
-
-            return toast;
-        }
-
-        function hideToast(toast) {
-            toast.classList.remove('show');
-            setTimeout(() => {
-                if (toast.parentNode) {
-                    toast.parentNode.removeChild(toast);
-                }
-            }, 300);
-        }
-
-        // Location Validation for Check-in
-        function validateCheckinLocation(section) {
-            LocationService.getCurrentLocation(true)
-                .then(location => {
-                    const validation = NeuralNetworkEngine.validateLocation(
-                        location,
-                        section.location,
-                        section.radius,
-                        location.accuracy
-                    );
-
-                    const statusElement = document.getElementById('checkinStatus');
-                    if (!statusElement) return;
-
-                    if (validation.valid && !validation.fraudDetected) {
-                        statusElement.innerHTML = `
-                            <div style="text-align: center; color: var(--success);">
-                                <i class="fas fa-check-circle" style="font-size: 48px; margin-bottom: 10px;"></i>
-                                <h3>Location Validated</h3>
-                                <p>You are within the required range (${validation.distance.toFixed(1)}m away)</p>
-                                <p style="font-size: 14px; color: var(--text-secondary);">
-                                    Confidence: ${(validation.confidence * 100).toFixed(1)}%
-                                </p>
-                                <div class="accuracy-indicator" style="justify-content: center; margin-top: 8px;">
-                                    <div class="accuracy-dot accuracy-${LocationService.getAccuracyLevel(validation.accuracy)}"></div>
-                                    <span>${LocationService.getAccuracyLevel(validation.accuracy).toUpperCase()} accuracy</span>
+                    html += `
+                        <div class="section-card" data-section="${section.id}" onclick="openSectionDetails('${section.id}')">
+                            <div class="section-card-header">
+                                <div class="section-emoji">${section.emoji}</div>
+                                <div style="flex: 1;">
+                                    <div class="section-name">${section.name}</div>
+                                    <div class="card-subtitle">${section.subject}</div>
+                                </div>
+                                ${sessionActive ? `<div class="session-badge">Active</div>` : ''}
+                            </div>
+                            <div class="section-info">
+                                <div class="section-teacher">
+                                    <span class="material-icons" style="font-size: 16px;">person</span>
+                                    ${section.teacherName}
+                                </div>
+                                <div class="section-stats">
+                                    <span>${studentCount} students</span>
+                                    <span>•</span>
+                                    <span>${section.schedule}</span>
+                                    ${plusPoints > 0 ? `<span>•</span><span class="plus-points">${plusPoints} pts</span>` : ''}
                                 </div>
                             </div>
-                        `;
-                        const confirmCheckin = document.getElementById('confirmCheckin');
-                        if (confirmCheckin) confirmCheckin.disabled = false;
-                    } else {
-                        statusElement.innerHTML = `
-                            <div style="text-align: center; color: var(--danger);">
-                                <i class="fas fa-times-circle" style="font-size: 48px; margin-bottom: 10px;"></i>
-                                <h3>Location Validation Failed</h3>
-                                <p>You are ${validation.distance.toFixed(1)}m away from the section location</p>
-                                <p>Required: Within ${section.radius}m</p>
-                                ${validation.fraudDetected ? 
-                                    '<p style="color: var(--warning);">Possible location spoofing detected</p>' : ''}
-                                <div class="accuracy-indicator" style="justify-content: center; margin-top: 8px;">
-                                    <div class="accuracy-dot accuracy-${LocationService.getAccuracyLevel(validation.accuracy)}"></div>
-                                    <span>${LocationService.getAccuracyLevel(validation.accuracy).toUpperCase()} accuracy</span>
-                                </div>
+                            ${appState.currentUser.role === 'student' && sessionActive ? `
+                            <div class="check-in-status" id="checkInStatus-${section.id}">
+                                <div class="loading-spinner small"></div>
+                                <span>Checking distance...</span>
                             </div>
-                        `;
-                        const confirmCheckin = document.getElementById('confirmCheckin');
-                        if (confirmCheckin) confirmCheckin.disabled = true;
-                    }
-                })
-                .catch(error => {
-                    const statusElement = document.getElementById('checkinStatus');
-                    if (statusElement) {
-                        statusElement.innerHTML = `
-                            <div style="text-align: center; color: var(--danger);">
-                                <i class="fas fa-exclamation-triangle" style="font-size: 48px; margin-bottom: 10px;"></i>
-                                <h3>Location Error</h3>
-                                <p>${error.message}</p>
-                                ${state.selectedSection.onlineCheckin ? 
-                                    `<p style="margin-top: 16px;">Try using online check-in instead</p>
-                                    <button class="btn btn-primary" onclick="processOnlineCheckin('${state.selectedSection.id}')" style="margin-top: 10px;">
-                                        <i class="fas fa-wifi"></i>
-                                        Use Online Check-in
-                                    </button>` : 
-                                    `<p style="margin-top: 16px;">Try using Bluetooth check-in instead</p>
-                                    <button class="btn btn-primary" onclick="closeAllModals(); openBLECheckinModal();" style="margin-top: 10px;">
-                                        <i class="fas fa-bluetooth"></i>
-                                        Use Bluetooth Check-in
-                                    </button>`}
+                            ` : ''}
+                        </div>
+                    `;
+                });
+            }
+
+            html += `
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <span class="material-icons" style="margin-right: 12px; color: var(--primary);">notifications</span>
+                        <div class="card-title">Recent Activity</div>
+                    </div>
+                    <ul class="list">
+            `;
+
+            if (appState.messages.length === 0) {
+                html += `
+                    <li class="list-item">
+                        <div class="list-item-content" style="text-align: center; color: var(--on-surface-variant);">
+                            No recent activity
+                        </div>
+                    </li>
+                `;
+            } else {
+                appState.messages.slice(0, 3).forEach(message => {
+                    html += `
+                        <li class="list-item" onclick="openMessageDetails('${message.id}')">
+                            <div class="list-item-icon" style="background-color: var(--primary-container); color: var(--on-primary-container);">
+                                <span class="material-icons">${message.type === 'announcement' ? 'campaign' : 'notifications'}</span>
                             </div>
-                        `;
-                    }
-                    const confirmCheckin = document.getElementById('confirmCheckin');
-                    if (confirmCheckin) confirmCheckin.disabled = true;
+                            <div class="list-item-content">
+                                <div class="list-item-title">${message.sender}</div>
+                                <div class="list-item-subtitle">${message.content.substring(0, 60)}${message.content.length > 60 ? '...' : ''}</div>
+                            </div>
+                            <div class="list-item-trailing">
+                                <div style="font-size: 12px; color: var(--on-surface-variant);">${formatTime(message.timestamp)}</div>
+                            </div>
+                        </li>
+                    `;
                 });
-        }
+            }
 
-        // Manual Check-in Options
-        function processLocationCheckin() {
-            closeAllModals();
-            if (state.selectedSection) {
-                openCheckinModal(state.selectedSection.id);
-            } else {
-                showToast('error', 'Check-in Error', 'No section selected');
+            html += `
+                    </ul>
+                </div>
+            `;
+
+            elements.mainContent.innerHTML = html;
+
+            if (appState.currentUser.role === 'student') {
+                appState.sections.forEach(section => {
+                    updateStudentCheckInStatus(section.id);
+                });
             }
         }
 
-        function processBluetoothCheckin() {
-            closeAllModals();
-            openBLECheckinModal();
-        }
+        // Update student check-in status
+        async function updateStudentCheckInStatus(sectionId) {
+            const statusElement = document.getElementById(`checkInStatus-${sectionId}`);
+            if (!statusElement) return;
 
-        function processBothCheckin() {
-            closeAllModals();
-            // Try location first
-            if (state.selectedSection) {
-                LocationService.getCurrentLocation()
-                    .then(location => {
-                        const validation = NeuralNetworkEngine.validateLocation(
-                            location,
-                            state.selectedSection.location,
-                            state.selectedSection.radius,
-                            location.accuracy
-                        );
-
-                        if (validation.valid && !validation.fraudDetected) {
-                            // Location check-in successful
-                            const attendanceData = {
-                                sectionId: state.selectedSection.id,
-                                sectionName: state.selectedSection.name,
-                                studentId: state.currentUser.uid,
-                                studentName: state.userData.name,
-                                timestamp: new Date(),
-                                location: {
-                                    latitude: location.latitude,
-                                    longitude: location.longitude,
-                                    accuracy: location.accuracy
-                                },
-                                status: 'present',
-                                distance: validation.distance,
-                                confidence: validation.confidence,
-                                fraudDetected: validation.fraudDetected,
-                                method: 'location',
-                                nearId: state.nearId
-                            };
-
-                            return db.collection('attendance').add(attendanceData);
-                        } else {
-                            // Location failed, try Bluetooth
-                            throw new Error('Location validation failed');
-                        }
-                    })
-                    .then(() => {
-                        showToast('success', 'Check-in Complete', 'Your attendance has been recorded via location');
-                        loadAttendanceData();
-                    })
-                    .catch(error => {
-                        // Location failed, try Bluetooth
-                        openBLECheckinModal();
-                    });
-            } else {
-                showToast('error', 'Check-in Error', 'No section selected');
-            }
-        }
-
-        // Online Check-in
-        function processOnlineCheckin(sectionId) {
-            const section = state.sections.find(s => s.id === sectionId);
-            if (!section) return;
-
-            if (!section.onlineCheckin) {
-                showToast('error', 'Online Check-in', 'Online check-in is not enabled for this section');
+            const section = appState.sections.find(s => s.id === sectionId);
+            if (!section || !section.active || !section.currentSession) {
+                statusElement.innerHTML = '<span>No active session</span>';
                 return;
             }
 
-            const attendanceData = {
-                sectionId: section.id,
-                sectionName: section.name,
-                studentId: state.currentUser.uid,
-                studentName: state.userData.name,
-                timestamp: new Date(),
-                status: 'present',
-                method: 'online',
-                nearId: state.nearId
-            };
-
-            db.collection('attendance').add(attendanceData)
-                .then(() => {
-                    showToast('success', 'Check-in Complete', 'Your attendance has been recorded via online check-in');
-                    closeAllModals();
-                    loadAttendanceData();
-                })
-                .catch(error => {
-                    showToast('error', 'Check-in Failed', error.message);
-                });
-        }
-
-        // BLE Device Scanning
-        function scanBLEDevices() {
-            BLEService.scanForDevices()
-                .then(devices => {
-                    const devicesList = document.getElementById('bleDevicesList');
-                    if (!devicesList) return;
-
-                    devicesList.innerHTML = '';
-
-                    if (devices.length === 0) {
-                        devicesList.innerHTML = '<option value="">No devices found</option>';
-                        return;
-                    }
-
-                    devices.forEach(device => {
-                        const option = document.createElement('option');
-                        option.value = device.id;
-                        option.textContent = device.name || `Device (${device.id.substring(0, 8)})`;
-                        devicesList.appendChild(option);
-                    });
-
-                    devicesList.disabled = false;
-                    const confirmBleCheckin = document.getElementById('confirmBleCheckin');
-                    if (confirmBleCheckin) confirmBleCheckin.disabled = false;
-                    showToast('success', 'Devices Found', `${devices.length} Bluetooth device(s) found`);
-                })
-                .catch(error => {
-                    showToast('error', 'Scan Failed', error.message);
-                });
-        }
-
-        function processBLECheckin() {
-            const devicesList = document.getElementById('bleDevicesList');
-            const sectionSelect = document.getElementById('bleCheckinSection');
-
-            if (!devicesList || !sectionSelect) return;
-
-            const selectedDeviceId = devicesList.value;
-            const selectedSectionId = sectionSelect.value;
-
-            if (!selectedDeviceId) {
-                showToast('error', 'Check-in Failed', 'Please select a device');
+            const activeSession = appState.activeSessions.find(s => s.id === section.currentSession);
+            if (!activeSession) {
+                statusElement.innerHTML = '<span>Session not found</span>';
                 return;
             }
 
-            if (!selectedSectionId) {
-                showToast('error', 'Check-in Failed', 'Please select a section');
-                return;
-            }
+            try {
+                const position = await getCurrentPosition();
+                const distance = calculateDistance(
+                    position.coords.latitude,
+                    position.coords.longitude,
+                    activeSession.location.lat,
+                    activeSession.location.lng
+                );
 
-            BLEService.validateBLEDevice(selectedDeviceId, selectedSectionId)
-                .then(validation => {
-                    if (validation.valid) {
-                        const attendanceData = {
-                            sectionId: selectedSectionId,
-                            sectionName: validation.sectionName,
-                            studentId: state.currentUser.uid,
-                            studentName: state.userData.name,
-                            timestamp: new Date(),
-                            status: 'present',
-                            method: 'bluetooth',
-                            deviceId: selectedDeviceId,
-                            nearId: state.nearId
-                        };
+                const inRange = distance <= activeSession.radius;
 
-                        return db.collection('attendance').add(attendanceData);
-                    } else {
-                        throw new Error('Bluetooth device validation failed');
-                    }
-                })
-                .then(() => {
-                    showToast('success', 'Check-in Complete', 'Your attendance has been recorded via Bluetooth');
-                    closeAllModals();
-                    loadAttendanceData();
-                })
-                .catch(error => {
-                    showToast('error', 'Check-in Failed', error.message);
-                });
-        }
-
-        function cancelAutoCheckin() {
-            AutoCheckinService.cancelAutoCheckin();
-        }
-
-        // Check-in Processing
-        function processCheckin() {
-            if (!state.selectedSection) return;
-
-            LocationService.getCurrentLocation()
-                .then(location => {
-                    const validation = NeuralNetworkEngine.validateLocation(
-                        location,
-                        state.selectedSection.location,
-                        state.selectedSection.radius,
-                        location.accuracy
-                    );
-
-                    const attendanceData = {
-                        sectionId: state.selectedSection.id,
-                        sectionName: state.selectedSection.name,
-                        studentId: state.currentUser.uid,
-                        studentName: state.userData.name,
-                        timestamp: new Date(),
-                        location: {
-                            latitude: location.latitude,
-                            longitude: location.longitude,
-                            accuracy: location.accuracy
-                        },
-                        status: validation.valid ? 'present' : 'absent',
-                        distance: validation.distance,
-                        confidence: validation.confidence,
-                        fraudDetected: validation.fraudDetected,
-                        method: 'manual',
-                        nearId: state.nearId
-                    };
-
-                    return db.collection('attendance').add(attendanceData);
-                })
-                .then(() => {
-                    showToast('success', 'Check-in Complete', 'Your attendance has been recorded');
-                    closeAllModals();
-                    loadAttendanceData();
-                })
-                .catch(error => {
-                    showToast('error', 'Check-in Failed', error.message);
-                });
-        }
-
-        function saveManualAttendance() {
-            const sectionSelect = document.getElementById('manualAttendanceSection');
-            const studentSelect = document.getElementById('manualAttendanceStudent');
-            const statusSelect = document.getElementById('manualAttendanceStatus');
-            const notesInput = document.getElementById('manualAttendanceNotes');
-
-            if (!sectionSelect || !studentSelect || !statusSelect) return;
-
-            const sectionId = sectionSelect.value;
-            const studentId = studentSelect.value;
-            const status = statusSelect.value;
-            const notes = notesInput?.value || '';
-
-            if (!sectionId || !studentId) {
-                showToast('error', 'Validation Error', 'Please select both a section and a student');
-                return;
-            }
-
-            const section = state.sections.find(s => s.id === sectionId);
-            const student = state.students.find(s => s.id === studentId);
-
-            if (!section || !student) {
-                showToast('error', 'Validation Error', 'Invalid section or student selected');
-                return;
-            }
-
-            const attendanceData = {
-                sectionId: sectionId,
-                sectionName: section.name,
-                studentId: studentId,
-                studentName: student.name,
-                timestamp: new Date(),
-                status: status,
-                method: 'manual',
-                notes: notes,
-                teacherId: state.currentUser.uid
-            };
-
-            db.collection('attendance').add(attendanceData)
-                .then(() => {
-                    showToast('success', 'Attendance Recorded', `${student.name} marked as ${status}`);
-                    closeAllModals();
-                    loadAttendanceData();
-
-                    const manualAttendanceForm = document.getElementById('manualAttendanceForm');
-                    if (manualAttendanceForm) manualAttendanceForm.reset();
-                })
-                .catch(error => {
-                    showToast('error', 'Save Failed', error.message);
-                });
-        }
-
-        // Update attendance status (teacher only)
-        function updateAttendanceStatus(attendanceId, newStatus) {
-            db.collection('attendance').doc(attendanceId).update({
-                    status: newStatus,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                })
-                .then(() => {
-                    showToast('success', 'Status Updated', 'Attendance status has been updated');
-                    loadAttendanceData();
-                })
-                .catch(error => {
-                    showToast('error', 'Update Failed', error.message);
-                });
-        }
-
-        // Settings Management
-        function saveLocationSettings() {
-            const precisionMode = document.getElementById('precisionMode')?.value;
-            const radiusType = document.getElementById('checkinRadius')?.value;
-            const customRadius = document.getElementById('customRadius')?.value;
-            const radius = radiusType === 'custom' ? parseInt(customRadius) : parseInt(radiusType);
-            const autoCheckin = document.getElementById('autoCheckinToggle')?.checked || false;
-            const nearId = document.getElementById('nearIdToggle')?.checked || false;
-
-            state.autoCheckinEnabled = autoCheckin;
-
-            if (state.userRole === 'student') {
-                if (autoCheckin) {
-                    AutoCheckinService.start();
+                if (inRange) {
+                    statusElement.innerHTML = `
+                        <span class="material-icons" style="color: var(--success); font-size: 16px;">check_circle</span>
+                        <span style="color: var(--success);">In range - Ready to check in</span>
+                    `;
                 } else {
-                    AutoCheckinService.stop();
+                    statusElement.innerHTML = `
+                        <span class="material-icons" style="color: var(--error); font-size: 16px;">location_off</span>
+                        <span style="color: var(--error);">Out of range (${Math.round(distance)}m)</span>
+                    `;
                 }
+            } catch (error) {
+                statusElement.innerHTML = `
+                    <span class="material-icons" style="color: var(--warning); font-size: 16px;">warning</span>
+                    <span>Location access required</span>
+                `;
             }
-
-            db.collection('userPreferences').doc(state.currentUser.uid).set({
-                    locationPrecision: precisionMode,
-                    checkinRadius: radius,
-                    autoCheckin: autoCheckin,
-                    nearId: nearId,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                }, {
-                    merge: true
-                })
-                .then(() => {
-                    showToast('success', 'Settings Saved', 'Location preferences updated successfully');
-                })
-                .catch(error => {
-                    showToast('error', 'Save Failed', error.message);
-                });
         }
 
-        function saveUserSettings() {
-            const displayName = document.getElementById('displayName')?.value;
-            const email = document.getElementById('userEmail')?.value;
-            const checkinConfirmation = document.getElementById('checkinConfirmation')?.value;
-            const locationReminder = document.getElementById('locationReminder')?.value;
-            const wattTransparency = document.getElementById('wattToggle')?.checked || false;
-
-            if (!displayName || !email) {
-                showToast('error', 'Validation Error', 'Please fill in all required fields');
-                return;
-            }
-
-            const promises = [];
-
-            if (displayName !== state.userData.name) {
-                promises.push(
-                    state.currentUser.updateProfile({
-                        displayName: displayName
-                    })
-                );
-            }
-
-            if (email !== state.currentUser.email) {
-                promises.push(
-                    state.currentUser.updateEmail(email)
-                );
-            }
-
-            Promise.all(promises)
-                .then(() => {
-                    return db.collection('users').doc(state.currentUser.uid).update({
-                        name: displayName,
-                        email: email
-                    });
-                })
-                .then(() => {
-                    return db.collection('userPreferences').doc(state.currentUser.uid).set({
-                        checkinConfirmation: checkinConfirmation,
-                        locationReminder: locationReminder,
-                        wattTransparency: wattTransparency,
-                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                    }, {
-                        merge: true
-                    });
-                })
-                .then(() => {
-                    showToast('success', 'Settings Saved', 'Your preferences have been updated');
-                    updateUserInterface();
-                })
-                .catch(error => {
-                    showToast('error', 'Save Failed', error.message);
-                });
-        }
-
-        function resetUserSettings() {
-            const displayName = document.getElementById('displayName');
-            const userEmail = document.getElementById('userEmail');
-            const checkinConfirmation = document.getElementById('checkinConfirmation');
-            const locationReminder = document.getElementById('locationReminder');
-            const wattToggle = document.getElementById('wattToggle');
-
-            if (displayName) displayName.value = state.userData.name;
-            if (userEmail) userEmail.value = state.currentUser.email;
-            if (checkinConfirmation) checkinConfirmation.value = 'show';
-            if (locationReminder) locationReminder.value = 'auto';
-            if (wattToggle) wattToggle.checked = true;
-
-            showToast('info', 'Settings Reset', 'All settings have been reset to defaults');
-        }
-
-        function clearLocalData() {
-            localStorage.removeItem('nearcheck_location_data');
-            localStorage.removeItem('nearcheck_section_data');
-            localStorage.removeItem('nearcheck_nearid');
-
-            showToast('success', 'Data Cleared', 'Local data has been cleared successfully');
-        }
-
-        function copyInvitationLink() {
-            const linkInput = document.getElementById('invitationLink');
-            if (!linkInput) return;
-
-            linkInput.select();
-            linkInput.setSelectionRange(0, 99999);
-
-            navigator.clipboard.writeText(linkInput.value)
-                .then(() => {
-                    showToast('success', 'Link Copied', 'Invitation link copied to clipboard');
-                })
-                .catch(() => {
-                    document.execCommand('copy');
-                    showToast('success', 'Link Copied', 'Invitation link copied to clipboard');
-                });
-        }
-
-        // Data Loading from Firestore
+        // Load sections page
         function loadSections() {
-            if (!state.currentUser) return;
+            let html = `
+                <div class="page-header">
+                    <div class="page-title">Sections</div>
+                    <div class="page-subtitle">Manage your classes and subjects</div>
+                </div>
+                
+                <div class="sections-grid">
+            `;
 
-            if (state.userRole === 'teacher') {
-                db.collection('sections')
-                    .where('teacherId', '==', state.currentUser.uid)
-                    .orderBy('createdAt', 'desc')
-                    .onSnapshot((snapshot) => {
-                        state.sections = snapshot.docs.map(doc => ({
-                            id: doc.id,
-                            ...doc.data()
-                        }));
-
-                        if (state.currentPage === 'dashboard') {
-                            loadDashboardData();
-                        } else if (state.currentPage === 'sections') {
-                            loadSectionsData();
+            if (appState.sections.length === 0) {
+                html += `
+                    <div style="text-align: center; padding: 48px; width: 100%; color: var(--on-surface-variant);">
+                        <span class="material-icons" style="font-size: 64px; margin-bottom: 16px; opacity: 0.5;">class</span>
+                        <div style="font-size: 18px; margin-bottom: 8px;">No sections yet</div>
+                        <div style="margin-bottom: 24px;">${appState.currentUser.role === 'teacher' ? 'Create your first section to get started!' : 'Join a section using a code from your teacher!'}</div>
+                        ${appState.currentUser.role === 'teacher' ? 
+                            '<button class="button button-filled" onclick="openCreateSectionModal()">Create Section</button>' :
+                            '<button class="button button-filled" onclick="openJoinSectionModal()">Join Section</button>'
                         }
-                    }, error => {
-                        console.error('Error loading sections:', error);
-                    });
+                    </div>
+                `;
             } else {
-                db.collection('sections')
-                    .where('students', 'array-contains', state.currentUser.uid)
-                    .orderBy('createdAt', 'desc')
-                    .onSnapshot((snapshot) => {
-                        state.sections = snapshot.docs.map(doc => ({
-                            id: doc.id,
-                            ...doc.data()
-                        }));
+                appState.sections.forEach(section => {
+                    const sessionActive = section.active && section.currentSession;
+                    const studentCount = section.students ? section.students.length : 0;
+                    const plusPoints = appState.plusPoints[section.id] || 0;
 
-                        if (state.currentPage === 'dashboard') {
-                            loadDashboardData();
-                        } else if (state.currentPage === 'sections') {
-                            loadSectionsData();
-                        }
-                    }, error => {
-                        console.error('Error loading sections:', error);
-                    });
+                    html += `
+                        <div class="section-card" data-section="${section.id}" onclick="openSectionDetails('${section.id}')">
+                            <div class="section-card-header">
+                                <div class="section-emoji">${section.emoji}</div>
+                                <div style="flex: 1;">
+                                    <div class="section-name">${section.name}</div>
+                                    <div class="card-subtitle">${section.subject}</div>
+                                </div>
+                                ${sessionActive ? `<div class="session-badge">Active</div>` : ''}
+                            </div>
+                            <div class="section-info">
+                                <div class="section-teacher">
+                                    <span class="material-icons" style="font-size: 16px;">person</span>
+                                    ${section.teacherName}
+                                </div>
+                                <div class="section-stats">
+                                    <span>${studentCount} students</span>
+                                    <span>•</span>
+                                    <span>${section.schedule}</span>
+                                    ${plusPoints > 0 ? `<span>•</span><span class="plus-points">${plusPoints} pts</span>` : ''}
+                                </div>
+                            </div>
+                            ${appState.currentUser.role === 'student' && sessionActive ? `
+                            <div class="check-in-status" id="checkInStatus-${section.id}">
+                                <div class="loading-spinner small"></div>
+                                <span>Checking distance...</span>
+                            </div>
+                            ` : ''}
+                        </div>
+                    `;
+                });
+            }
+
+            html += `
+                </div>
+            `;
+
+            elements.mainContent.innerHTML = html;
+
+            if (appState.currentUser.role === 'student') {
+                appState.sections.forEach(section => {
+                    updateStudentCheckInStatus(section.id);
+                });
             }
         }
 
-        function loadAttendanceData() {
-            if (!state.currentUser) return;
+        // Load sessions page (Teacher only)
+        function loadSessions() {
+            let html = `
+                <div class="page-header">
+                    <div class="page-title">Session Management</div>
+                    <div class="page-subtitle">Start and manage attendance sessions</div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <span class="material-icons" style="margin-right: 12px; color: var(--primary);">play_circle</span>
+                        <div class="card-title">Active Sessions</div>
+                    </div>
+                    <div id="activeSessionsList">
+            `;
 
-            if (state.userRole === 'teacher') {
-                const sectionIds = state.sections.map(s => s.id);
+            if (appState.activeSessions.length === 0) {
+                html += `
+                    <div style="text-align: center; padding: 32px; color: var(--on-surface-variant);">
+                        <span class="material-icons" style="font-size: 48px; margin-bottom: 16px; opacity: 0.5;">schedule</span>
+                        <div>No active sessions</div>
+                        <div style="margin-top: 16px;">Start a session from any section to begin tracking attendance</div>
+                    </div>
+                `;
+            } else {
+                appState.activeSessions.forEach(session => {
+                    const section = appState.sections.find(s => s.id === session.sectionId);
+                    if (!section) return;
 
-                if (sectionIds.length === 0) {
-                    state.attendance = [];
-                    if (state.currentPage === 'attendance') {
-                        loadAttendanceData();
-                    }
+                    html += `
+                        <div class="session-card" data-session="${session.id}">
+                            <div class="session-header">
+                                <div class="session-emoji">${section.emoji}</div>
+                                <div style="flex: 1;">
+                                    <div class="session-name">${section.name}</div>
+                                    <div class="card-subtitle">${section.subject}</div>
+                                </div>
+                                <div class="session-timer">
+                                    <span class="material-icons" style="font-size: 16px; margin-right: 4px;">schedule</span>
+                                    ${formatSessionDuration(session.startTime)}
+                                </div>
+                            </div>
+                            <div class="session-stats">
+                                <div class="stat">
+                                    <div class="stat-value">${session.checkedInCount || 0}</div>
+                                    <div class="stat-label">Checked In</div>
+                                </div>
+                                <div class="stat">
+                                    <div class="stat-value">${session.students ? session.students.length : 0}</div>
+                                    <div class="stat-label">Total Students</div>
+                                </div>
+                                <div class="stat">
+                                    <div class="stat-value">${session.radius}m</div>
+                                    <div class="stat-label">Radius</div>
+                                </div>
+                            </div>
+                            <div class="session-actions">
+                                <button class="button button-tonal" onclick="openSessionDetails('${session.id}')">
+                                    <span class="material-icons" style="font-size: 16px; margin-right: 4px;">visibility</span>
+                                    View Details
+                                </button>
+                                <button class="button button-filled" onclick="endSession('${session.id}')">
+                                    <span class="material-icons" style="font-size: 16px; margin-right: 4px;">stop</span>
+                                    End Session
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+
+            html += `
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <span class="material-icons" style="margin-right: 12px; color: var(--primary);">history</span>
+                        <div class="card-title">Recent Sessions</div>
+                    </div>
+                    <div id="recentSessionsList" style="padding: 16px; text-align: center; color: var(--on-surface-variant);">
+                        Loading recent sessions...
+                    </div>
+                </div>
+            `;
+
+            elements.mainContent.innerHTML = html;
+
+            loadRecentSessions();
+        }
+
+        // Load recent sessions
+        async function loadRecentSessions() {
+            try {
+                const recentSessions = await db.collection('sessions')
+                    .where('teacherId', '==', appState.currentUser.id)
+                    .where('active', '==', false)
+                    .orderBy('endTime', 'desc')
+                    .limit(5)
+                    .get();
+
+                const recentSessionsList = document.getElementById('recentSessionsList');
+
+                if (recentSessions.empty) {
+                    recentSessionsList.innerHTML = '<div>No recent sessions found</div>';
                     return;
                 }
 
-                db.collection('attendance')
-                    .where('sectionId', 'in', sectionIds)
-                    .orderBy('timestamp', 'desc')
-                    .limit(100)
-                    .onSnapshot((snapshot) => {
-                        state.attendance = snapshot.docs.map(doc => ({
-                            id: doc.id,
-                            ...doc.data()
-                        }));
+                let html = '<ul class="list">';
+                recentSessions.forEach(doc => {
+                    const session = doc.data();
+                    const section = appState.sections.find(s => s.id === session.sectionId);
 
-                        if (state.currentPage === 'attendance') {
-                            loadAttendanceData();
-                        } else if (state.currentPage === 'dashboard') {
-                            loadDashboardData();
-                        }
-                    }, error => {
-                        console.error('Error loading attendance:', error);
-                    });
-            } else {
-                db.collection('attendance')
-                    .where('studentId', '==', state.currentUser.uid)
-                    .orderBy('timestamp', 'desc')
-                    .onSnapshot((snapshot) => {
-                        state.attendance = snapshot.docs.map(doc => ({
-                            id: doc.id,
-                            ...doc.data()
-                        }));
-
-                        if (state.currentPage === 'attendance') {
-                            loadAttendanceData();
-                        } else if (state.currentPage === 'dashboard') {
-                            loadDashboardData();
-                        }
-                    }, error => {
-                        console.error('Error loading attendance:', error);
-                    });
-            }
-        }
-
-        // Data Management Functions
-        function loadUserData() {
-            return db.collection('users').doc(state.currentUser.uid).get()
-                .then(doc => {
-                    if (doc.exists) {
-                        state.userData = doc.data();
-                        state.userRole = state.userData.role;
-
-                        return db.collection('userPreferences').doc(state.currentUser.uid).get();
-                    } else {
-                        throw new Error('User data not found');
-                    }
-                })
-                .then(prefDoc => {
-                    if (prefDoc.exists) {
-                        const preferences = prefDoc.data();
-
-                        if (preferences.darkMode) {
-                            const darkModeToggle = document.getElementById('darkModeToggle');
-                            if (darkModeToggle) {
-                                darkModeToggle.checked = true;
-                                toggleDarkMode();
-                            }
-                        }
-
-                        if (preferences.autoCheckin !== undefined) {
-                            state.autoCheckinEnabled = preferences.autoCheckin;
-                            const autoCheckinToggle = document.getElementById('autoCheckinToggle');
-                            if (autoCheckinToggle) {
-                                autoCheckinToggle.checked = state.autoCheckinEnabled;
-                            }
-                        }
-
-                        if (preferences.locationPrecision) {
-                            const precisionMode = document.getElementById('precisionMode');
-                            if (precisionMode) precisionMode.value = preferences.locationPrecision;
-                        }
-                        if (preferences.checkinRadius) {
-                            const checkinRadius = document.getElementById('checkinRadius');
-                            if (checkinRadius) checkinRadius.value = preferences.checkinRadius;
-                        }
-                    }
-
-                    loadSections();
-                    loadAttendanceData();
-
-                    return Promise.resolve();
-                })
-                .catch(error => {
-                    console.error('Error loading user data:', error);
-                    throw error;
+                    html += `
+                        <li class="list-item">
+                            <div class="list-item-content">
+                                <div class="list-item-title">${section ? section.name : 'Unknown Section'}</div>
+                                <div class="list-item-subtitle">
+                                    ${formatDate(session.startTime)} • ${formatTime(session.startTime)} - ${formatTime(session.endTime)}
+                                </div>
+                                <div style="font-size: 12px; color: var(--on-surface-variant); margin-top: 4px;">
+                                    ${session.checkedInCount || 0} students checked in
+                                </div>
+                            </div>
+                            <div class="list-item-trailing">
+                                <button class="button button-text" onclick="viewSessionReport('${doc.id}')">
+                                    View Report
+                                </button>
+                            </div>
+                        </li>
+                    `;
                 });
-        }
+                html += '</ul>';
 
-        function loadDashboardData() {
-            if (state.userRole === 'teacher') {
-                loadTeacherDashboard();
-            } else {
-                loadStudentDashboard();
+                recentSessionsList.innerHTML = html;
+            } catch (error) {
+                console.error('Error loading recent sessions:', error);
+                document.getElementById('recentSessionsList').innerHTML = '<div>Error loading recent sessions</div>';
             }
         }
 
-        function loadTeacherDashboard() {
-            const statsContainer = document.getElementById('dashboardStats');
-            if (!statsContainer) return;
-
-            const activeSections = state.sections.filter(s => s.isActive).length;
-            const totalStudents = new Set();
-            state.sections.forEach(section => {
-                if (section.students) {
-                    section.students.forEach(studentId => totalStudents.add(studentId));
-                }
-            });
-
-            const today = new Date().toDateString();
-            const todayAttendance = state.attendance.filter(a =>
-                new Date(a.timestamp).toDateString() === today
-            );
-            const presentToday = todayAttendance.filter(a => a.status === 'present').length;
-
-            statsContainer.innerHTML = `
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">Active Sections</div>
-                        <div class="card-icon primary">
-                            <i class="fas fa-layer-group"></i>
-                        </div>
-                    </div>
-                    <div class="card-content">${activeSections}</div>
-                    <div class="card-footer">Out of ${state.sections.length} total</div>
+        // Load messages page
+        function loadMessages() {
+            let html = `
+                <div class="page-header">
+                    <div class="page-title">Messages</div>
+                    <div class="page-subtitle">Announcements and notifications</div>
                 </div>
                 
                 <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">Total Students</div>
-                        <div class="card-icon success">
-                            <i class="fas fa-users"></i>
-                        </div>
+                    <div class="tabs">
+                        <div class="tab active" data-tab="all">All</div>
+                        <div class="tab" data-tab="announcements">Announcements</div>
+                        <div class="tab" data-tab="reminders">Reminders</div>
+                        <div class="tab" data-tab="unread">Unread</div>
                     </div>
-                    <div class="card-content">${totalStudents.size}</div>
-                    <div class="card-footer">Across all sections</div>
-                </div>
-                
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">Present Today</div>
-                        <div class="card-icon warning">
-                            <i class="fas fa-user-check"></i>
+                    <ul class="list" id="messagesList">
+            `;
+
+            if (appState.messages.length === 0) {
+                html += `
+                    <li class="list-item">
+                        <div class="list-item-content" style="text-align: center; color: var(--on-surface-variant);">
+                            <span class="material-icons" style="font-size: 48px; margin-bottom: 16px; opacity: 0.5;">chat</span>
+                            <div>No messages yet</div>
                         </div>
-                    </div>
-                    <div class="card-content">${presentToday}</div>
-                    <div class="card-footer">${totalStudents.size ? Math.round((presentToday/totalStudents.size)*100) : 0}% attendance rate</div>
-                </div>
-                
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">Active Sessions</div>
-                        <div class="card-icon danger">
-                            <i class="fas fa-play-circle"></i>
-                        </div>
-                    </div>
-                    <div class="card-content">${Object.keys(state.activeSessions).length}</div>
-                    <div class="card-footer">Currently running</div>
+                    </li>
+                `;
+            } else {
+                appState.messages.forEach(message => {
+                    const time = formatTime(message.timestamp);
+                    const isUnread = !message.read || (message.read && !message.read.includes(appState.currentUser.id));
+
+                    html += `
+                        <li class="list-item ${isUnread ? 'unread' : ''}" onclick="openMessageDetails('${message.id}')">
+                            <div class="list-item-icon" style="background-color: var(--primary-container); color: var(--on-primary-container);">
+                                <span class="material-icons">${message.type === 'announcement' ? 'campaign' : 'notifications'}</span>
+                            </div>
+                            <div class="list-item-content">
+                                <div class="list-item-title">${message.sender}</div>
+                                <div class="list-item-subtitle">${message.content.substring(0, 80)}${message.content.length > 80 ? '...' : ''}</div>
+                                <div style="font-size: 12px; color: var(--on-surface-variant); margin-top: 4px;">
+                                    ${message.sectionName || ''}
+                                </div>
+                            </div>
+                            <div class="list-item-trailing">
+                                <div style="font-size: 12px; color: var(--on-surface-variant);">${time}</div>
+                                ${isUnread ? '<div class="unread-dot"></div>' : ''}
+                            </div>
+                        </li>
+                    `;
+                });
+            }
+
+            html += `
+                    </ul>
                 </div>
             `;
 
-            updateSectionsCarousel();
+            elements.mainContent.innerHTML = html;
+
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    filterMessages(tab.getAttribute('data-tab'));
+                });
+            });
         }
 
-        function loadStudentDashboard() {
-            const enrolledSections = state.sections.filter(s =>
-                s.students && s.students.includes(state.currentUser.uid)
+        // Filter messages by type
+        function filterMessages(type) {
+            const messages = appState.messages;
+            let filteredMessages = messages;
+
+            if (type === 'announcements') {
+                filteredMessages = messages.filter(msg => msg.type === 'announcement');
+            } else if (type === 'reminders') {
+                filteredMessages = messages.filter(msg => msg.type === 'reminder');
+            } else if (type === 'unread') {
+                filteredMessages = messages.filter(msg => !msg.read || (msg.read && !msg.read.includes(appState.currentUser.id)));
+            }
+
+            const messagesList = document.getElementById('messagesList');
+            messagesList.innerHTML = '';
+
+            if (filteredMessages.length === 0) {
+                messagesList.innerHTML = `
+                    <li class="list-item">
+                        <div class="list-item-content" style="text-align: center; color: var(--on-surface-variant);">
+                            No ${type === 'all' ? '' : type} messages
+                        </div>
+                    </li>
+                `;
+            } else {
+                filteredMessages.forEach(message => {
+                    const time = formatTime(message.timestamp);
+                    const isUnread = !message.read || (message.read && !message.read.includes(appState.currentUser.id));
+
+                    const li = document.createElement('li');
+                    li.className = `list-item ${isUnread ? 'unread' : ''}`;
+                    li.onclick = () => openMessageDetails(message.id);
+                    li.innerHTML = `
+                        <div class="list-item-icon" style="background-color: var(--primary-container); color: var(--on-primary-container);">
+                            <span class="material-icons">${message.type === 'announcement' ? 'campaign' : 'notifications'}</span>
+                        </div>
+                        <div class="list-item-content">
+                            <div class="list-item-title">${message.sender}</div>
+                            <div class="list-item-subtitle">${message.content.substring(0, 80)}${message.content.length > 80 ? '...' : ''}</div>
+                            <div style="font-size: 12px; color: var(--on-surface-variant); margin-top: 4px;">
+                                ${message.sectionName || ''}
+                            </div>
+                        </div>
+                        <div class="list-item-trailing">
+                            <div style="font-size: 12px; color: var(--on-surface-variant);">${time}</div>
+                            ${isUnread ? '<div class="unread-dot"></div>' : ''}
+                        </div>
+                    `;
+                    messagesList.appendChild(li);
+                });
+            }
+        }
+
+        // Load settings page
+        function loadSettings() {
+            let html = `
+                <div class="page-header">
+                    <div class="page-title">Settings</div>
+                    <div class="page-subtitle">Manage your preferences and account</div>
+                </div>
+                
+                <div class="settings-grid">
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="material-icons" style="margin-right: 12px; color: var(--primary);">person</span>
+                            <div class="card-title">Profile Settings</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="profileName" class="form-label">Display Name</label>
+                            <input type="text" class="form-input" id="profileName" value="${appState.currentUser.name}">
+                        </div>
+                        <div class="form-group">
+                            <label for="profilePronouns" class="form-label">Pronouns</label>
+                            <input type="text" class="form-input" id="profilePronouns" value="${appState.currentUser.pronouns || ''}" placeholder="e.g., they/them">
+                        </div>
+                        <div class="form-group">
+                            <label for="profileAvatar" class="form-label">Profile Emoji/Initials</label>
+                            <input type="text" class="form-input" id="profileAvatar" value="${appState.nearId.profileEmoji}" maxlength="2">
+                            <div style="font-size: 12px; color: var(--on-surface-variant); margin-top: 4px;">
+                                ${canChangeEmoji() ? 'You can change this now.' : `Next change available in ${getDaysUntilEmojiChange()} days`}
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Identity Color</label>
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <div style="width: 32px; height: 32px; border-radius: 16px; background-color: ${appState.nearId.identityColor};"></div>
+                                <div style="color: var(--on-surface-variant);">Your permanent identity color</div>
+                            </div>
+                        </div>
+                        <button class="button button-filled" style="width: 100%; margin-top: 16px;" onclick="saveProfile()">Save Profile Changes</button>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="material-icons" style="margin-right: 12px; color: var(--primary);">security</span>
+                            <div class="card-title">Privacy & Permissions</div>
+                        </div>
+                        <div class="list">
+                            <div class="list-item">
+                                <div class="list-item-content">
+                                    <div class="list-item-title">Location Access</div>
+                                    <div class="list-item-subtitle">Required for check-in verification</div>
+                                </div>
+                                <div class="list-item-trailing">
+                                    <label class="toggle">
+                                        <input type="checkbox" ${appState.settings.locationAccess ? 'checked' : ''} id="locationAccessToggle" onchange="toggleLocationAccess(event)">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="list-item">
+                                <div class="list-item-content">
+                                    <div class="list-item-title">Auto Check-In</div>
+                                    <div class="list-item-subtitle">Automatically check in when in range</div>
+                                </div>
+                                <div class="list-item-trailing">
+                                    <label class="toggle">
+                                        <input type="checkbox" ${appState.settings.autoCheckIn ? 'checked' : ''} id="globalAutoCheckInToggle" onchange="toggleGlobalAutoCheckIn(event)">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="list-item">
+                                <div class="list-item-content">
+                                    <div class="list-item-title">Notifications</div>
+                                    <div class="list-item-subtitle">Receive class announcements and reminders</div>
+                                </div>
+                                <div class="list-item-trailing">
+                                    <label class="toggle">
+                                        <input type="checkbox" ${appState.settings.notifications ? 'checked' : ''} id="notificationsToggle" onchange="toggleNotifications(event)">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="list-item">
+                                <div class="list-item-content">
+                                    <div class="list-item-title">SilentScan Protection</div>
+                                    <div class="list-item-subtitle">Prevent overlapping location detection</div>
+                                </div>
+                                <div class="list-item-trailing">
+                                    <label class="toggle">
+                                        <input type="checkbox" ${appState.settings.silentScan ? 'checked' : ''} id="silentScanToggle" onchange="toggleSilentScan(event)">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="list-item">
+                                <div class="list-item-content">
+                                    <div class="list-item-title">Analytics for Research</div>
+                                    <div class="list-item-subtitle">Help improve NearCheck+ by sharing anonymous usage data</div>
+                                </div>
+                                <div class="list-item-trailing">
+                                    <label class="toggle">
+                                        <input type="checkbox" ${appState.settings.analyticsEnabled ? 'checked' : ''} id="analyticsToggle" onchange="toggleAnalytics(event)">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="material-icons" style="margin-right: 12px; color: var(--primary);">accessibility</span>
+                            <div class="card-title">Accessibility</div>
+                        </div>
+                        <div class="list">
+                            <div class="list-item">
+                                <div class="list-item-content">
+                                    <div class="list-item-title">High Contrast</div>
+                                    <div class="list-item-subtitle">Increase color contrast for better visibility</div>
+                                </div>
+                                <div class="list-item-trailing">
+                                    <label class="toggle">
+                                        <input type="checkbox" ${appState.settings.highContrast ? 'checked' : ''} id="highContrastToggle" onchange="toggleHighContrast(event)">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="list-item">
+                                <div class="list-item-content">
+                                    <div class="list-item-title">Large Text</div>
+                                    <div class="list-item-subtitle">Increase text size for better readability</div>
+                                </div>
+                                <div class="list-item-trailing">
+                                    <label class="toggle">
+                                        <input type="checkbox" ${appState.settings.largeText ? 'checked' : ''} id="largeTextToggle" onchange="toggleLargeText(event)">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="list-item">
+                                <div class="list-item-content">
+                                    <div class="list-item-title">Reduce Motion</div>
+                                    <div class="list-item-subtitle">Reduce animations and transitions</div>
+                                </div>
+                                <div class="list-item-trailing">
+                                    <label class="toggle">
+                                        <input type="checkbox" ${appState.settings.reduceMotion ? 'checked' : ''} id="reduceMotionToggle" onchange="toggleReduceMotion(event)">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="list-item">
+                                <div class="list-item-content">
+                                    <div class="list-item-title">Dyslexia-Friendly Font</div>
+                                    <div class="list-item-subtitle">Use OpenDyslexic font for better readability</div>
+                                </div>
+                                <div class="list-item-trailing">
+                                    <label class="toggle">
+                                        <input type="checkbox" ${appState.settings.dyslexiaFont ? 'checked' : ''} id="dyslexiaFontToggle" onchange="toggleDyslexiaFont(event)">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="list-item">
+                                <div class="list-item-content">
+                                    <div class="list-item-title">Voice Commands</div>
+                                    <div class="list-item-subtitle">Enable voice control for navigation</div>
+                                </div>
+                                <div class="list-item-trailing">
+                                    <label class="toggle">
+                                        <input type="checkbox" ${appState.settings.voiceCommands ? 'checked' : ''} id="voiceCommandsToggle" onchange="toggleVoiceCommands(event)">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="list-item">
+                                <div class="list-item-content">
+                                    <div class="list-item-title">Haptic Feedback</div>
+                                    <div class="list-item-subtitle">Provide tactile feedback for interactions</div>
+                                </div>
+                                <div class="list-item-trailing">
+                                    <label class="toggle">
+                                        <input type="checkbox" ${appState.settings.hapticFeedback ? 'checked' : ''} id="hapticFeedbackToggle" onchange="toggleHapticFeedback(event)">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+            `;
+
+            if (appState.currentUser.role === 'teacher') {
+                html += `
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="material-icons" style="margin-right: 12px; color: var(--primary);">school</span>
+                            <div class="card-title">Teacher Settings</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="defaultRadius" class="form-label">Default Check-in Radius (meters)</label>
+                            <input type="range" class="form-input" id="defaultRadius" min="5" max="100" value="${appState.settings.defaultRadius}" oninput="updateDefaultRadiusDisplay(this.value)">
+                            <div style="text-align: center; margin-top: 8px;" id="radiusValueDisplay">${appState.settings.defaultRadius} meters</div>
+                        </div>
+                        <div class="list">
+                            <div class="list-item">
+                                <div class="list-item-content">
+                                    <div class="list-item-title">Auto Sessions</div>
+                                    <div class="list-item-subtitle">Automatically start sessions based on schedule</div>
+                                </div>
+                                <div class="list-item-trailing">
+                                    <label class="toggle">
+                                        <input type="checkbox" ${appState.settings.autoSessions ? 'checked' : ''} id="autoSessionsToggle" onchange="toggleAutoSessions(event)">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="list-item">
+                                <div class="list-item-content">
+                                    <div class="list-item-title">Beacon Mode</div>
+                                    <div class="list-item-subtitle">Enable passive WebRTC signals for accuracy</div>
+                                </div>
+                                <div class="list-item-trailing">
+                                    <label class="toggle">
+                                        <input type="checkbox" ${appState.settings.beaconMode ? 'checked' : ''} id="beaconModeToggle" onchange="toggleBeaconMode(event)">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            html += `
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="material-icons" style="margin-right: 12px; color: var(--primary);">history</span>
+                            <div class="card-title">Data & History</div>
+                        </div>
+                        <button class="button button-tonal" style="width: 100%; margin-bottom: 12px;" onclick="viewAttendanceHistory()">View Attendance History</button>
+                        <button class="button button-outlined" style="width: 100%; margin-bottom: 12px;" onclick="exportData()">Export My Data</button>
+                        <button class="button button-text" style="width: 100%; color: var(--error);" onclick="confirmDeleteAccount()">Delete Account</button>
+                    </div>
+                </div>
+            `;
+
+            elements.mainContent.innerHTML = html;
+        }
+
+        // Load profile page
+        function loadProfile() {
+            loadSettings();
+        }
+
+        // Handle FAB button click
+        function handleFabClick() {
+            if (appState.currentUser.role === 'teacher') {
+                showTeacherFabOptions();
+            } else {
+                showStudentFabOptions();
+            }
+        }
+
+        // Show teacher FAB options
+        function showTeacherFabOptions() {
+            let html = `
+                <div class="sheet-header">
+                    <div class="sheet-title">Quick Actions</div>
+                    <button class="sheet-close" id="sheetClose" aria-label="Close">
+                        <span class="material-icons" aria-hidden="true">close</span>
+                    </button>
+                </div>
+                <div class="sheet-content">
+                    <ul class="list">
+                        <li class="list-item" onclick="openCreateSectionModal()">
+                            <div class="list-item-icon" style="background-color: var(--primary-container); color: var(--on-primary-container);">
+                                <span class="material-icons">add</span>
+                            </div>
+                            <div class="list-item-content">
+                                <div class="list-item-title">Create New Section</div>
+                                <div class="list-item-subtitle">Start a new class or subject</div>
+                            </div>
+                        </li>
+                        <li class="list-item" onclick="openQuickAnnouncementModal()">
+                            <div class="list-item-icon" style="background-color: var(--primary-container); color: var(--on-primary-container);">
+                                <span class="material-icons">campaign</span>
+                            </div>
+                            <div class="list-item-content">
+                                <div class="list-item-title">Send Announcement</div>
+                                <div class="list-item-subtitle">Share updates with your classes</div>
+                            </div>
+                        </li>
+                        <li class="list-item" onclick="openStartSessionModal()">
+                            <div class="list-item-icon" style="background-color: var(--primary-container); color: var(--on-primary-container);">
+                                <span class="material-icons">play_circle</span>
+                            </div>
+                            <div class="list-item-content">
+                                <div class="list-item-title">Start Session</div>
+                                <div class="list-item-subtitle">Begin attendance tracking</div>
+                            </div>
+                        </li>
+                        <li class="list-item" onclick="openStudentManagement()">
+                            <div class="list-item-icon" style="background-color: var(--primary-container); color: var(--on-primary-container);">
+                                <span class="material-icons">group_add</span>
+                            </div>
+                            <div class="list-item-content">
+                                <div class="list-item-title">Manage Students</div>
+                                <div class="list-item-subtitle">Add or remove students</div>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            `;
+
+            openModal(html);
+            document.getElementById('sheetClose').addEventListener('click', closeModal);
+        }
+
+        // Show student FAB options
+        function showStudentFabOptions() {
+            let html = `
+                <div class="sheet-header">
+                    <div class="sheet-title">Quick Actions</div>
+                    <button class="sheet-close" id="sheetClose" aria-label="Close">
+                        <span class="material-icons" aria-hidden="true">close</span>
+                    </button>
+                </div>
+                <div class="sheet-content">
+                    <ul class="list">
+                        <li class="list-item" onclick="openJoinSectionModal()">
+                            <div class="list-item-icon" style="background-color: var(--primary-container); color: var(--on-primary-container);">
+                                <span class="material-icons">group_add</span>
+                            </div>
+                            <div class="list-item-content">
+                                <div class="list-item-title">Join Section</div>
+                                <div class="list-item-subtitle">Enter a section code to join</div>
+                            </div>
+                        </li>
+                        <li class="list-item" onclick="openManualCheckIn()">
+                            <div class="list-item-icon" style="background-color: var(--primary-container); color: var(--on-primary-container);">
+                                <span class="material-icons">location_on</span>
+                            </div>
+                            <div class="list-item-content">
+                                <div class="list-item-title">Manual Check-In</div>
+                                <div class="list-item-subtitle">Check in to active sessions</div>
+                            </div>
+                        </li>
+                        <li class="list-item" onclick="openAttendanceHistory()">
+                            <div class="list-item-icon" style="background-color: var(--primary-container); color: var(--on-primary-container);">
+                                <span class="material-icons">history</span>
+                            </div>
+                            <div class="list-item-content">
+                                <div class="list-item-title">View Attendance</div>
+                                <div class="list-item-subtitle">Check your attendance records</div>
+                            </div>
+                        </li>
+                        <li class="list-item" onclick="loadPage('settings')">
+                            <div class="list-item-icon" style="background-color: var(--primary-container); color: var(--on-primary-container);">
+                                <span class="material-icons">settings</span>
+                            </div>
+                            <div class="list-item-content">
+                                <div class="list-item-title">Settings</div>
+                                <div class="list-item-subtitle">Manage preferences and privacy</div>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            `;
+
+            openModal(html);
+            document.getElementById('sheetClose').addEventListener('click', closeModal);
+        }
+
+        // Open section details (Google Classroom style)
+        async function openSectionDetails(sectionId) {
+            const section = appState.sections.find(s => s.id === sectionId);
+            if (!section) return;
+
+            appState.activeSection = section;
+
+            await loadSectionStudents(sectionId);
+            await loadSectionAttendance(sectionId);
+            await loadSectionPlusPoints(sectionId);
+
+            let html = `
+                <div class="section-details">
+                    <div class="section-header" style="background: linear-gradient(135deg, ${section.color}20, ${section.color}40);">
+                        <button class="back-button" id="sectionBackButton" aria-label="Back to sections">
+                            <span class="material-icons" aria-hidden="true">arrow_back</span>
+                        </button>
+                        <div class="section-header-content">
+                            <div class="section-emoji-large">${section.emoji}</div>
+                            <div>
+                                <h1 class="section-title">${section.name}</h1>
+                                <div class="section-subtitle">${section.subject} • ${section.schedule}</div>
+                                <div class="section-teacher">Teacher: ${section.teacherName}</div>
+                                ${section.meetLink ? `
+                                <div class="section-meet-link">
+                                    <span class="material-icons" style="font-size: 16px;">video_call</span>
+                                    <a href="${section.meetLink}" target="_blank">Join Google Meet</a>
+                                </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="section-tabs">
+                        <div class="section-tab active" data-tab="stream">Stream</div>
+                        <div class="section-tab" data-tab="students">Students</div>
+                        <div class="section-tab" data-tab="attendance">Attendance</div>
+                        ${appState.currentUser.role === 'teacher' ? '<div class="section-tab" data-tab="settings">Settings</div>' : ''}
+                    </div>
+
+                    <div class="section-content">
+                        <div class="tab-content active" id="streamTab">
+                            ${await loadStreamTab(section)}
+                        </div>
+                        <div class="tab-content" id="studentsTab">
+                            ${loadStudentsTab(section)}
+                        </div>
+                        <div class="tab-content" id="attendanceTab">
+                            ${loadAttendanceTab(section)}
+                        </div>
+                        ${appState.currentUser.role === 'teacher' ? `
+                        <div class="tab-content" id="settingsTab">
+                            ${loadSettingsTab(section)}
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+
+            elements.mainContent.innerHTML = html;
+
+            document.getElementById('sectionBackButton').addEventListener('click', () => {
+                loadPage('sections');
+            });
+
+            document.querySelectorAll('.section-tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    const tabName = tab.getAttribute('data-tab');
+
+                    document.querySelectorAll('.section-tab').forEach(t => t.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+                    tab.classList.add('active');
+                    document.getElementById(tabName + 'Tab').classList.add('active');
+                });
+            });
+
+            setupStreamTabListeners(section);
+            if (appState.currentUser.role === 'teacher') {
+                setupStudentsTabListeners(section);
+                setupSettingsTabListeners(section);
+            }
+
+            if (appState.currentUser.role === 'student') {
+                updateSectionCheckInStatus(section);
+            }
+        }
+
+        // Load stream tab content
+        async function loadStreamTab(section) {
+            const announcements = appState.messages.filter(msg =>
+                msg.sectionId === section.id && msg.type === 'announcement'
             );
 
-            const today = new Date().toDateString();
-            const todayAttendance = state.attendance.filter(a =>
-                a.studentId === state.currentUser.uid &&
-                new Date(a.timestamp).toDateString() === today
+            const pinned = announcements.filter(msg => msg.pinned);
+            const regular = announcements.filter(msg => !msg.pinned);
+
+            let html = `
+                <div class="stream-container">
+                    ${appState.currentUser.role === 'teacher' ? `
+                    <div class="compose-card">
+                        <div class="compose-header">
+                            <div class="profile-avatar-small">${appState.nearId.profileEmoji}</div>
+                            <div style="flex: 1;">
+                                <input type="text" class="compose-input" id="announcementInput" placeholder="Share something with your class...">
+                            </div>
+                        </div>
+                        <div class="compose-actions">
+                            <button class="button button-filled" onclick="postAnnouncement('${section.id}')">
+                                Post
+                            </button>
+                            <label class="toggle" style="margin-left: 12px;">
+                                <input type="checkbox" id="pinAnnouncement">
+                                <span class="toggle-slider"></span>
+                                <span style="margin-left: 12px; font-size: 14px;">Pin</span>
+                            </label>
+                        </div>
+                    </div>
+                    ` : ''}
+
+                    ${appState.currentUser.role === 'student' && section.active ? `
+                    <div class="check-in-card" id="sectionCheckInStatus">
+                        <div class="loading-spinner small"></div>
+                        <span>Checking session status...</span>
+                    </div>
+                    ` : ''}
+            `;
+
+            if (pinned.length > 0) {
+                html += `
+                    <div class="pinned-section">
+                        <div class="section-title">
+                            <span class="material-icons">push_pin</span>
+                            Pinned Announcements
+                        </div>
+                `;
+
+                pinned.forEach(announcement => {
+                    html += `
+                        <div class="announcement-card pinned">
+                            <div class="announcement-header">
+                                <div class="profile-avatar-small">${announcement.senderAvatar || '👤'}</div>
+                                <div>
+                                    <div class="announcement-sender">${announcement.sender}</div>
+                                    <div class="announcement-time">${formatTime(announcement.timestamp)}</div>
+                                </div>
+                                ${appState.currentUser.role === 'teacher' ? `
+                                <div class="announcement-actions">
+                                    <button class="button button-text" onclick="unpinAnnouncement('${announcement.id}')">
+                                        <span class="material-icons">push_pin</span>
+                                    </button>
+                                    <button class="button button-text" onclick="deleteAnnouncement('${announcement.id}')">
+                                        <span class="material-icons">delete</span>
+                                    </button>
+                                </div>
+                                ` : ''}
+                            </div>
+                            <div class="announcement-content">
+                                ${announcement.content}
+                            </div>
+                            ${announcement.dueDate ? `
+                            <div class="announcement-due">
+                                <span class="material-icons">schedule</span>
+                                Due: ${formatDate(announcement.dueDate)}
+                            </div>
+                            ` : ''}
+                        </div>
+                    `;
+                });
+
+                html += `</div>`;
+            }
+
+            if (regular.length > 0) {
+                html += `
+                    <div class="announcements-section">
+                        <div class="section-title">Recent Announcements</div>
+                `;
+
+                regular.slice(0, 10).forEach(announcement => {
+                    html += `
+                        <div class="announcement-card">
+                            <div class="announcement-header">
+                                <div class="profile-avatar-small">${announcement.senderAvatar || '👤'}</div>
+                                <div>
+                                    <div class="announcement-sender">${announcement.sender}</div>
+                                    <div class="announcement-time">${formatTime(announcement.timestamp)}</div>
+                                </div>
+                                ${appState.currentUser.role === 'teacher' ? `
+                                <div class="announcement-actions">
+                                    <button class="button button-text" onclick="pinAnnouncement('${announcement.id}')">
+                                        <span class="material-icons">push_pin</span>
+                                    </button>
+                                    <button class="button button-text" onclick="deleteAnnouncement('${announcement.id}')">
+                                        <span class="material-icons">delete</span>
+                                    </button>
+                                </div>
+                                ` : ''}
+                            </div>
+                            <div class="announcement-content">
+                                ${announcement.content}
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += `</div>`;
+            }
+
+            if (pinned.length === 0 && regular.length === 0) {
+                html += `
+                    <div class="empty-state">
+                        <span class="material-icons">campaign</span>
+                        <div>No announcements yet</div>
+                        ${appState.currentUser.role === 'teacher' ? '<div>Be the first to share something with your class!</div>' : ''}
+                    </div>
+                `;
+            }
+
+            html += `</div>`;
+
+            return html;
+        }
+
+        // Load students tab content
+        function loadStudentsTab(section) {
+            if (appState.currentUser.role !== 'teacher') {
+                return `
+                    <div class="empty-state">
+                        <span class="material-icons">school</span>
+                        <div>Student list is only available to teachers</div>
+                    </div>
+                `;
+            }
+
+            const students = appState.students[section.id] || [];
+
+            let html = `
+                <div class="students-container">
+                    <div class="students-header">
+                        <div class="students-count">${students.length} Students</div>
+                        <div style="display: flex; gap: 12px;">
+                            <button class="button button-tonal" onclick="generateJoinQR('${section.id}')">
+                                <span class="material-icons">qr_code</span>
+                                QR Code
+                            </button>
+                            <button class="button button-filled" onclick="openAddStudentsModal('${section.id}')">
+                                <span class="material-icons">person_add</span>
+                                Add Students
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="students-list">
+            `;
+
+            if (students.length === 0) {
+                html += `
+                    <div class="empty-state">
+                        <span class="material-icons">group</span>
+                        <div>No students in this section yet</div>
+                        <div>Add students using the button above</div>
+                    </div>
+                `;
+            } else {
+                const rankings = calculateRankings(section.id);
+
+                html += `
+                    <div class="rankings-header">
+                        <div class="ranking-title">Student Rankings</div>
+                        <div class="ranking-subtitle">Based on PlusPoints and attendance</div>
+                    </div>
+                    <div class="rankings-list">
+                `;
+
+                rankings.slice(0, 10).forEach((student, index) => {
+                    const rank = index + 1;
+                    const attendanceRate = calculateStudentAttendanceRate(student.id, section.id);
+
+                    html += `
+                        <div class="ranking-item ${rank <= 3 ? 'top-three' : ''}">
+                            <div class="ranking-rank">${rank}</div>
+                            <div class="student-avatar" style="background-color: ${student.color || '#6750A4'};">${student.avatar || '👤'}</div>
+                            <div class="ranking-info">
+                                <div class="ranking-name">${student.name}</div>
+                                <div class="ranking-stats">
+                                    <span>${attendanceRate}% attendance</span>
+                                    <span>•</span>
+                                    <span>${student.points || 0} pts</span>
+                                </div>
+                            </div>
+                            <div class="ranking-actions">
+                                <button class="button button-text" onclick="addPlusPoints('${student.id}', '${section.id}', 5)">
+                                    +5
+                                </button>
+                                <button class="button button-text" onclick="viewStudentDetails('${student.id}', '${section.id}')">
+                                    View
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += `</div>`;
+            }
+
+            html += `
+                    </div>
+                </div>
+            `;
+
+            return html;
+        }
+
+        // Load attendance tab content
+        function loadAttendanceTab(section) {
+            const today = new Date().toISOString().split('T')[0];
+            const todayAttendance = (appState.sectionAttendance[section.id] || []).filter(a =>
+                a.timestamp.split('T')[0] === today
             );
 
-            const presentToday = todayAttendance.filter(a => a.status === 'present').length;
-            const totalSections = enrolledSections.length;
+            let html = `
+                <div class="attendance-container">
+                    <div class="attendance-header">
+                        <div class="attendance-stats">
+                            <div class="stat">
+                                <div class="stat-value">${todayAttendance.filter(a => a.status === 'present').length}</div>
+                                <div class="stat-label">Present</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-value">${todayAttendance.filter(a => a.status === 'absent').length}</div>
+                                <div class="stat-label">Absent</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-value">${Math.round((todayAttendance.filter(a => a.status === 'present').length / Math.max(section.students?.length || 1, 1)) * 100)}%</div>
+                                <div class="stat-label">Attendance Rate</div>
+                            </div>
+                        </div>
+                        ${appState.currentUser.role === 'teacher' ? `
+                        <div class="attendance-actions">
+                            <button class="button button-outlined" onclick="exportSectionAttendance('${section.id}')">
+                                <span class="material-icons">download</span>
+                                Export
+                            </button>
+                            <button class="button button-filled" onclick="takeManualAttendance('${section.id}')">
+                                <span class="material-icons">edit</span>
+                                Manual Edit
+                            </button>
+                        </div>
+                        ` : ''}
+                    </div>
 
-            const studentAttendanceToday = document.getElementById('studentAttendanceToday');
-            const studentAttendanceRate = document.getElementById('studentAttendanceRate');
-            const studentActiveSections = document.getElementById('studentActiveSections');
-            const studentLocationAccuracy = document.getElementById('studentLocationAccuracy');
-            const studentLocationStatus = document.getElementById('studentLocationStatus');
+                    <div class="attendance-list">
+                        <div class="attendance-table">
+                            <div class="table-header">
+                                <div>Student</div>
+                                <div>Status</div>
+                                <div>Time</div>
+                                <div>Method</div>
+                            </div>
+            `;
 
-            if (studentAttendanceToday) studentAttendanceToday.textContent = `${presentToday}/${totalSections}`;
-            if (studentAttendanceRate) studentAttendanceRate.textContent = `${totalSections ? Math.round((presentToday/totalSections)*100) : 0}% attendance rate`;
-            if (studentActiveSections) studentActiveSections.textContent = enrolledSections.length;
-
-            if (studentLocationAccuracy && studentLocationStatus) {
-                if (state.currentLocation) {
-                    studentLocationAccuracy.textContent = '94%';
-                    studentLocationStatus.textContent = 'High precision mode';
-                } else {
-                    studentLocationAccuracy.textContent = 'N/A';
-                    studentLocationStatus.textContent = 'Location not available';
-                }
-            }
-
-            updateStudentSectionsCarousel();
-        }
-
-        function loadSectionsData() {
-            if (state.userRole === 'teacher') {
-                updateAllSectionsCarousel();
+            if (todayAttendance.length === 0) {
+                html += `
+                    <div class="table-empty">
+                        No attendance records for today
+                    </div>
+                `;
             } else {
-                updateStudentEnrolledSectionsCarousel();
+                todayAttendance.forEach(record => {
+                    html += `
+                        <div class="table-row">
+                            <div class="student-cell">
+                                <div class="student-avatar-small">${record.userAvatar || '👤'}</div>
+                                <div>${record.userName}</div>
+                            </div>
+                            <div class="status-cell">
+                                <span class="status-badge ${record.status}">${record.status}</span>
+                            </div>
+                            <div class="time-cell">${formatTime(record.timestamp)}</div>
+                            <div class="method-cell">${record.method || 'manual'}</div>
+                        </div>
+                    `;
+                });
             }
+
+            html += `
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            return html;
         }
 
-        function loadAttendanceData() {
-            if (state.userRole === 'teacher') {
-                loadTeacherAttendance();
-            } else {
-                loadStudentAttendance();
+        // Load settings tab content
+        function loadSettingsTab(section) {
+            if (appState.currentUser.role !== 'teacher') {
+                return `
+                    <div class="empty-state">
+                        <span class="material-icons">settings</span>
+                        <div>Section settings are only available to teachers</div>
+                    </div>
+                `;
             }
+
+            return `
+                <div class="settings-container">
+                    <div class="settings-group">
+                        <h3>Section Information</h3>
+                        <div class="form-group">
+                            <label for="sectionNameEdit" class="form-label">Section Name</label>
+                            <input type="text" class="form-input" id="sectionNameEdit" value="${section.name}">
+                        </div>
+                        <div class="form-group">
+                            <label for="sectionSubjectEdit" class="form-label">Subject</label>
+                            <input type="text" class="form-input" id="sectionSubjectEdit" value="${section.subject}">
+                        </div>
+                        <div class="form-group">
+                            <label for="sectionScheduleEdit" class="form-label">Schedule</label>
+                            <input type="text" class="form-input" id="sectionScheduleEdit" value="${section.schedule}" placeholder="e.g., Mon, Wed, Fri 10:00 AM">
+                        </div>
+                        <div class="form-group">
+                            <label for="sectionMeetLink" class="form-label">Google Meet Link (Optional)</label>
+                            <input type="url" class="form-input" id="sectionMeetLink" value="${section.meetLink || ''}" placeholder="https://meet.google.com/abc-defg-hij">
+                        </div>
+                    </div>
+
+                    <div class="settings-group">
+                        <h3>Location Settings</h3>
+                        <div id="locationMapContainer" style="height: 300px; margin-bottom: 16px; border-radius: 12px; overflow: hidden;"></div>
+                        <div class="form-group">
+                            <label for="sectionRadiusEdit" class="form-label">Check-in Radius (meters)</label>
+                            <input type="range" class="form-input" id="sectionRadiusEdit" min="5" max="100" value="${section.radius || 50}" oninput="updateSectionRadiusDisplay(this.value)">
+                            <div style="text-align: center; margin-top: 8px;" id="sectionRadiusValue">${section.radius || 50} meters</div>
+                        </div>
+                        <div class="form-group">
+                            <label class="toggle">
+                                <input type="checkbox" ${section.autoCheckIn ? 'checked' : ''} id="sectionAutoCheckInToggle">
+                                <span class="toggle-slider"></span>
+                                <span style="margin-left: 12px;">Enable Auto Check-In</span>
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label class="toggle">
+                                <input type="checkbox" ${section.remoteCheckIn ? 'checked' : ''} id="sectionRemoteCheckInToggle">
+                                <span class="toggle-slider"></span>
+                                <span style="margin-left: 12px;">Allow Remote Check-In (without GPS)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="settings-group">
+                        <h3>Session Automation</h3>
+                        <div class="form-group">
+                            <label for="autoStartTime" class="form-label">Auto Start Time</label>
+                            <input type="time" class="form-input" id="autoStartTime" value="${section.autoStartTime || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label for="autoEndTime" class="form-label">Auto End Time</label>
+                            <input type="time" class="form-input" id="autoEndTime" value="${section.autoEndTime || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label class="toggle">
+                                <input type="checkbox" ${section.autoSessions ? 'checked' : ''} id="sectionAutoSessionsToggle">
+                                <span class="toggle-slider"></span>
+                                <span style="margin-left: 12px;">Enable Auto Sessions</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="settings-actions">
+                        <button class="button button-filled" onclick="saveSectionSettings('${section.id}')">Save Changes</button>
+                        <button class="button button-tonal" onclick="regenerateJoinCode('${section.id}')">Regenerate Join Code</button>
+                        <button class="button button-text" style="color: var(--error);" onclick="deleteSection('${section.id}')">Delete Section</button>
+                    </div>
+
+                    <div class="settings-group">
+                        <h3>Join Information</h3>
+                        <div class="join-info">
+                            <div class="join-code">Join Code: <strong>${section.joinCode}</strong></div>
+                            <div style="display: flex; gap: 12px; margin-top: 12px;">
+                                <button class="button button-tonal" onclick="shareJoinCode('${section.joinCode}')">
+                                    <span class="material-icons">share</span>
+                                    Share Code
+                                </button>
+                                <button class="button button-tonal" onclick="generateJoinQR('${section.id}')">
+                                    <span class="material-icons">qr_code</span>
+                                    QR Code
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
         }
 
-        function loadTeacherAttendance() {
-            const container = document.getElementById('attendanceTableContainer');
+        // Initialize map for section settings
+        async function initializeSectionMap(sectionId) {
+            const section = appState.sections.find(s => s.id === sectionId);
+            if (!section) return;
+
+            const container = document.getElementById('locationMapContainer');
             if (!container) return;
 
-            if (state.attendance.length === 0) {
-                container.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><i class="fas fa-clipboard-check"></i></div><div class="empty-state-title">No attendance records</div><div class="empty-state-description">Attendance records will appear here once students start checking in.</div></div>';
+            if (appState.location.map) {
+                appState.location.map.remove();
+            }
+
+            const map = L.map(container).setView([section.location.lat, section.location.lng], 16);
+            appState.location.map = map;
+            trackFeatureUsage('map');
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+
+            const marker = L.marker([section.location.lat, section.location.lng], {
+                draggable: true
+            }).addTo(map);
+
+            const circle = L.circle([section.location.lat, section.location.lng], {
+                radius: section.radius || 50,
+                fillColor: '#6750A4',
+                fillOpacity: 0.2,
+                color: '#6750A4',
+                weight: 2
+            }).addTo(map);
+
+            marker.on('dragend', function(event) {
+                const newLatLng = event.target.getLatLng();
+                section.location.lat = newLatLng.lat;
+                section.location.lng = newLatLng.lng;
+                circle.setLatLng(newLatLng);
+                showToast('Location updated. Remember to save changes.');
+            });
+
+            document.getElementById('sectionRadiusEdit').addEventListener('input', function(e) {
+                circle.setRadius(parseInt(e.target.value));
+            });
+        }
+
+        // Setup stream tab event listeners
+        function setupStreamTabListeners(section) {
+            if (appState.currentUser.role === 'teacher') {
+                const announcementInput = document.getElementById('announcementInput');
+                if (announcementInput) {
+                    announcementInput.addEventListener('keypress', (e) => {
+                        if (e.key === 'Enter') {
+                            postAnnouncement(section.id);
+                        }
+                    });
+                }
+            }
+        }
+
+        // Setup students tab event listeners
+        function setupStudentsTabListeners(section) {
+            // Event listeners are already set up via onclick attributes
+        }
+
+        // Setup settings tab event listeners
+        function setupSettingsTabListeners(section) {
+            initializeSectionMap(section.id);
+        }
+
+        // Post announcement
+        async function postAnnouncement(sectionId) {
+            const input = document.getElementById('announcementInput');
+            const content = input.value.trim();
+            const pin = document.getElementById('pinAnnouncement')?.checked || false;
+
+            if (!content) {
+                showToast('Please enter announcement content');
                 return;
             }
 
-            const today = new Date().toDateString();
-            const todayRecords = state.attendance.filter(a =>
-                new Date(a.timestamp).toDateString() === today
+            try {
+                const announcement = {
+                    type: 'announcement',
+                    content: sanitizeInput(content),
+                    sender: appState.currentUser.name,
+                    senderAvatar: appState.nearId.profileEmoji,
+                    sectionId: sectionId,
+                    sectionName: appState.sections.find(s => s.id === sectionId)?.name || 'Unknown Section',
+                    recipients: appState.sections.find(s => s.id === sectionId)?.students || [],
+                    timestamp: new Date().toISOString(),
+                    pinned: pin,
+                    read: [],
+                    reactions: {}
+                };
+
+                await db.collection('messages').add(announcement);
+                input.value = '';
+                if (document.getElementById('pinAnnouncement')) {
+                    document.getElementById('pinAnnouncement').checked = false;
+                }
+                showToast('Announcement posted successfully');
+                trackFeatureUsage('messaging');
+            } catch (error) {
+                console.error('Error posting announcement:', error);
+                showToast('Error posting announcement');
+            }
+        }
+
+        // Pin/unpin announcement
+        async function pinAnnouncement(messageId) {
+            try {
+                await db.collection('messages').doc(messageId).update({
+                    pinned: true
+                });
+                showToast('Announcement pinned');
+            } catch (error) {
+                console.error('Error pinning announcement:', error);
+                showToast('Error pinning announcement');
+            }
+        }
+
+        async function unpinAnnouncement(messageId) {
+            try {
+                await db.collection('messages').doc(messageId).update({
+                    pinned: false
+                });
+                showToast('Announcement unpinned');
+            } catch (error) {
+                console.error('Error unpinning announcement:', error);
+                showToast('Error unpinning announcement');
+            }
+        }
+
+        // Delete announcement
+        async function deleteAnnouncement(messageId) {
+            if (!confirm('Are you sure you want to delete this announcement?')) {
+                return;
+            }
+
+            try {
+                await db.collection('messages').doc(messageId).delete();
+                showToast('Announcement deleted');
+            } catch (error) {
+                console.error('Error deleting announcement:', error);
+                showToast('Error deleting announcement');
+            }
+        }
+
+        // Save section settings
+        async function saveSectionSettings(sectionId) {
+            const name = document.getElementById('sectionNameEdit').value;
+            const subject = document.getElementById('sectionSubjectEdit').value;
+            const schedule = document.getElementById('sectionScheduleEdit').value;
+            const meetLink = document.getElementById('sectionMeetLink')?.value || '';
+            const radius = parseInt(document.getElementById('sectionRadiusEdit').value);
+            const autoCheckIn = document.getElementById('sectionAutoCheckInToggle').checked;
+            const remoteCheckIn = document.getElementById('sectionRemoteCheckInToggle').checked;
+            const autoStartTime = document.getElementById('autoStartTime').value;
+            const autoEndTime = document.getElementById('autoEndTime').value;
+            const autoSessions = document.getElementById('sectionAutoSessionsToggle').checked;
+
+            if (!name || !subject || !schedule) {
+                showToast('Please fill in all required fields');
+                return;
+            }
+
+            try {
+                await db.collection('sections').doc(sectionId).update({
+                    name: name,
+                    subject: subject,
+                    schedule: schedule,
+                    meetLink: meetLink,
+                    radius: radius,
+                    autoCheckIn: autoCheckIn,
+                    remoteCheckIn: remoteCheckIn,
+                    autoStartTime: autoStartTime,
+                    autoEndTime: autoEndTime,
+                    autoSessions: autoSessions
+                });
+
+                showToast('Section settings updated successfully');
+            } catch (error) {
+                console.error('Error updating section settings:', error);
+                showToast('Error updating section settings');
+            }
+        }
+
+        // Update section radius display
+        function updateSectionRadiusDisplay(value) {
+            document.getElementById('sectionRadiusValue').textContent = `${value} meters`;
+        }
+
+        // Regenerate join code
+        async function regenerateJoinCode(sectionId) {
+            try {
+                const newJoinCode = generateJoinCode();
+                await db.collection('sections').doc(sectionId).update({
+                    joinCode: newJoinCode
+                });
+
+                showToast('Join code regenerated successfully');
+            } catch (error) {
+                console.error('Error regenerating join code:', error);
+                showToast('Error regenerating join code');
+            }
+        }
+
+        // Generate join QR code
+        async function generateJoinQR(sectionId) {
+            const section = appState.sections.find(s => s.id === sectionId);
+            if (!section) return;
+
+            const joinUrl = `${window.location.origin}/join?code=${section.joinCode}`;
+
+            let html = `
+                <div class="sheet-header">
+                    <div class="sheet-title">Join QR Code</div>
+                    <button class="sheet-close" id="sheetClose" aria-label="Close">
+                        <span class="material-icons" aria-hidden="true">close</span>
+                    </button>
+                </div>
+                <div class="sheet-content" style="text-align: center;">
+                    <div style="margin-bottom: 16px;">
+                        <div style="font-weight: 500; margin-bottom: 8px;">${section.name}</div>
+                        <div style="color: var(--on-surface-variant); font-size: 14px;">Join Code: ${section.joinCode}</div>
+                    </div>
+                    <div id="qrCodeContainer" style="width: 200px; height: 200px; margin: 0 auto 24px;"></div>
+                    <div style="font-size: 14px; color: var(--on-surface-variant); margin-bottom: 16px;">
+                        Scan this QR code to join the section
+                    </div>
+                    <button class="button button-tonal" onclick="downloadQRCode('${section.name}')">
+                        <span class="material-icons">download</span>
+                        Download QR Code
+                    </button>
+                </div>
+            `;
+
+            openModal(html);
+            document.getElementById('sheetClose').addEventListener('click', closeModal);
+
+            // Generate QR code
+            QRCode.toCanvas(document.getElementById('qrCodeContainer'), joinUrl, {
+                width: 200,
+                height: 200,
+                margin: 1,
+                color: {
+                    dark: '#6750A4',
+                    light: '#FFFFFF'
+                }
+            }, function(error) {
+                if (error) {
+                    console.error('Error generating QR code:', error);
+                    document.getElementById('qrCodeContainer').innerHTML = '<div>Error generating QR code</div>';
+                }
+            });
+        }
+
+        // Download QR code
+        function downloadQRCode(sectionName) {
+            const canvas = document.querySelector('#qrCodeContainer canvas');
+            if (!canvas) return;
+
+            const link = document.createElement('a');
+            link.download = `${sectionName.replace(/\s+/g, '-')}-qr-code.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+
+        // Delete section
+        async function deleteSection(sectionId) {
+            const section = appState.sections.find(s => s.id === sectionId);
+            if (!section) return;
+
+            if (!confirm(`Are you sure you want to delete "${section.name}"? This action cannot be undone.`)) {
+                return;
+            }
+
+            try {
+                await db.collection('sections').doc(sectionId).delete();
+                showToast('Section deleted successfully');
+                loadPage('sections');
+            } catch (error) {
+                console.error('Error deleting section:', error);
+                showToast('Error deleting section');
+            }
+        }
+
+        // Open add students modal
+        function openAddStudentsModal(sectionId) {
+            const section = appState.sections.find(s => s.id === sectionId);
+            if (!section) return;
+
+            let html = `
+                <div class="sheet-header">
+                    <div class="sheet-title">Add Students to ${section.name}</div>
+                    <button class="sheet-close" id="sheetClose" aria-label="Close">
+                        <span class="material-icons" aria-hidden="true">close</span>
+                    </button>
+                </div>
+                <div class="sheet-content">
+                    <div class="join-info-card">
+                        <div style="font-weight: 500; margin-bottom: 8px;">Share Join Code</div>
+                        <div class="join-code-large">${section.joinCode}</div>
+                        <div style="font-size: 14px; color: var(--on-surface-variant); margin-bottom: 16px;">
+                            Students can enter this code to join
+                        </div>
+                        <button class="button button-tonal" style="width: 100%; margin-bottom: 12px;" onclick="shareJoinCode('${section.joinCode}')">
+                            <span class="material-icons" style="margin-right: 8px;">share</span>
+                            Share Code
+                        </button>
+                        <button class="button button-tonal" style="width: 100%;" onclick="generateJoinQR('${sectionId}')">
+                            <span class="material-icons" style="margin-right: 8px;">qr_code</span>
+                            Generate QR Code
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            openModal(html);
+            document.getElementById('sheetClose').addEventListener('click', closeModal);
+        }
+
+        // Share join code
+        function shareJoinCode(joinCode) {
+            if (navigator.share) {
+                navigator.share({
+                    title: 'Join My Class on NearCheck+',
+                    text: `Use this code to join my class: ${joinCode}`,
+                    url: window.location.href
+                }).catch(console.error);
+            } else {
+                navigator.clipboard.writeText(joinCode).then(() => {
+                    showToast('Join code copied to clipboard');
+                }).catch(() => {
+                    showToast('Join code: ' + joinCode);
+                });
+            }
+        }
+
+        // Save profile
+        async function saveProfile() {
+            const name = sanitizeInput(document.getElementById('profileName').value);
+            const pronouns = sanitizeInput(document.getElementById('profilePronouns').value);
+            const avatar = sanitizeInput(document.getElementById('profileAvatar').value);
+
+            if (!name) {
+                showToast('Please enter a display name');
+                return;
+            }
+
+            if (avatar !== appState.nearId.profileEmoji && !canChangeEmoji()) {
+                showToast(`You can only change your emoji once every 12 days. Next change available in ${getDaysUntilEmojiChange()} days.`);
+                return;
+            }
+
+            try {
+                const updateData = {
+                    name: name,
+                    pronouns: pronouns
+                };
+
+                if (avatar !== appState.nearId.profileEmoji && canChangeEmoji()) {
+                    updateData['nearId.profileEmoji'] = avatar;
+                    updateData['nearId.lastEmojiChange'] = new Date().toISOString();
+                    appState.nearId.profileEmoji = avatar;
+                    appState.nearId.lastEmojiChange = new Date().toISOString();
+                }
+
+                await db.collection('users').doc(appState.currentUser.id).update(updateData);
+
+                appState.currentUser.name = name;
+                appState.currentUser.pronouns = pronouns;
+
+                showToast('Profile updated successfully');
+            } catch (error) {
+                console.error('Error updating profile:', error);
+                showToast('Error updating profile');
+            }
+        }
+
+        // Check if emoji can be changed
+        function canChangeEmoji() {
+            if (!appState.nearId.lastEmojiChange) return true;
+            const lastChange = new Date(appState.nearId.lastEmojiChange);
+            const now = new Date();
+            const daysSinceLastChange = (now - lastChange) / (1000 * 60 * 60 * 24);
+            return daysSinceLastChange >= 12;
+        }
+
+        // Get days until next emoji change
+        function getDaysUntilEmojiChange() {
+            if (!appState.nearId.lastEmojiChange) return 0;
+            const lastChange = new Date(appState.nearId.lastEmojiChange);
+            const now = new Date();
+            const daysSinceLastChange = (now - lastChange) / (1000 * 60 * 60 * 24);
+            const daysUntilNextChange = Math.ceil(12 - daysSinceLastChange);
+            return Math.max(0, daysUntilNextChange);
+        }
+
+        // Update user setting
+        async function updateUserSetting(setting, value) {
+            try {
+                await db.collection('users').doc(appState.currentUser.id).update({
+                    [`settings.${setting}`]: value
+                });
+                appState.settings[setting] = value;
+            } catch (error) {
+                console.error(`Error updating ${setting} setting:`, error);
+                throw error;
+            }
+        }
+
+        // Toggle location access
+        async function toggleLocationAccess(e) {
+            const enabled = e.target.checked;
+            await updateUserSetting('locationAccess', enabled);
+            showToast(`Location access ${enabled ? 'enabled' : 'disabled'}`);
+        }
+
+        // Toggle global auto check-in
+        async function toggleGlobalAutoCheckIn(e) {
+            const enabled = e.target.checked;
+            await updateUserSetting('autoCheckIn', enabled);
+            showToast(`Auto Check-In ${enabled ? 'enabled' : 'disabled'}`);
+        }
+
+        // Toggle notifications
+        async function toggleNotifications(e) {
+            const enabled = e.target.checked;
+            await updateUserSetting('notifications', enabled);
+            showToast(`Notifications ${enabled ? 'enabled' : 'disabled'}`);
+        }
+
+        // Toggle silent scan
+        async function toggleSilentScan(e) {
+            const enabled = e.target.checked;
+            await updateUserSetting('silentScan', enabled);
+            showToast(`SilentScan ${enabled ? 'enabled' : 'disabled'}`);
+        }
+
+        // Toggle analytics
+        async function toggleAnalytics(e) {
+            const enabled = e.target.checked;
+            await updateUserSetting('analyticsEnabled', enabled);
+            saveAccessibilitySettings();
+            showToast(`Analytics ${enabled ? 'enabled' : 'disabled'}`);
+        }
+
+        // Toggle high contrast
+        async function toggleHighContrast(e) {
+            const enabled = e.target.checked;
+            await updateUserSetting('highContrast', enabled);
+            applyAccessibilitySettings();
+            saveAccessibilitySettings();
+            showToast(`High contrast ${enabled ? 'enabled' : 'disabled'}`);
+        }
+
+        // Toggle large text
+        async function toggleLargeText(e) {
+            const enabled = e.target.checked;
+            await updateUserSetting('largeText', enabled);
+            applyAccessibilitySettings();
+            saveAccessibilitySettings();
+            showToast(`Large text ${enabled ? 'enabled' : 'disabled'}`);
+        }
+
+        // Toggle reduce motion
+        async function toggleReduceMotion(e) {
+            const enabled = e.target.checked;
+            await updateUserSetting('reduceMotion', enabled);
+            applyAccessibilitySettings();
+            saveAccessibilitySettings();
+            showToast(`Reduced motion ${enabled ? 'enabled' : 'disabled'}`);
+        }
+
+        // Toggle dyslexia font
+        async function toggleDyslexiaFont(e) {
+            const enabled = e.target.checked;
+            await updateUserSetting('dyslexiaFont', enabled);
+            applyAccessibilitySettings();
+            saveAccessibilitySettings();
+            showToast(`Dyslexia-friendly font ${enabled ? 'enabled' : 'disabled'}`);
+        }
+
+        // Toggle voice commands
+        async function toggleVoiceCommands(e) {
+            const enabled = e.target.checked;
+            await updateUserSetting('voiceCommands', enabled);
+            if (enabled) {
+                voiceCommands.init();
+            } else {
+                voiceCommands.destroy();
+            }
+            saveAccessibilitySettings();
+            showToast(`Voice commands ${enabled ? 'enabled' : 'disabled'}`);
+        }
+
+        // Toggle haptic feedback
+        async function toggleHapticFeedback(e) {
+            const enabled = e.target.checked;
+            await updateUserSetting('hapticFeedback', enabled);
+            saveAccessibilitySettings();
+            showToast(`Haptic feedback ${enabled ? 'enabled' : 'disabled'}`);
+        }
+
+        // Update default radius display
+        function updateDefaultRadiusDisplay(value) {
+            document.getElementById('radiusValueDisplay').textContent = `${value} meters`;
+            updateDefaultRadius(parseInt(value));
+        }
+
+        // Update default radius (teacher only)
+        async function updateDefaultRadius(radius) {
+            await updateUserSetting('defaultRadius', radius);
+        }
+
+        // Toggle auto sessions (teacher only)
+        async function toggleAutoSessions(e) {
+            const enabled = e.target.checked;
+            await updateUserSetting('autoSessions', enabled);
+            showToast(`Auto sessions ${enabled ? 'enabled' : 'disabled'}`);
+        }
+
+        // Toggle beacon mode (teacher only)
+        async function toggleBeaconMode(e) {
+            const enabled = e.target.checked;
+            await updateUserSetting('beaconMode', enabled);
+            showToast(`Beacon mode ${enabled ? 'enabled' : 'disabled'}`);
+        }
+
+        // View attendance history
+        function viewAttendanceHistory() {
+            openAttendanceHistoryModal();
+        }
+
+        // Open attendance history modal
+        function openAttendanceHistoryModal() {
+            let html = `
+                <div class="sheet-header">
+                    <div class="sheet-title">Attendance History</div>
+                    <button class="sheet-close" id="sheetClose" aria-label="Close">
+                        <span class="material-icons" aria-hidden="true">close</span>
+                    </button>
+                </div>
+                <div class="sheet-content">
+                    <div class="attendance-history">
+                        <div class="history-stats">
+                            <div class="stat">
+                                <div class="stat-value">${appState.attendanceData.filter(a => a.status === 'present').length}</div>
+                                <div class="stat-label">Total Present</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-value">${appState.attendanceData.filter(a => a.status === 'absent').length}</div>
+                                <div class="stat-label">Total Absent</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-value">${calculateOverallAttendance()}%</div>
+                                <div class="stat-label">Overall Rate</div>
+                            </div>
+                        </div>
+                        <div class="history-list">
+            `;
+
+            if (appState.attendanceData.length === 0) {
+                html += `
+                    <div class="empty-state">
+                        <span class="material-icons">history</span>
+                        <div>No attendance records yet</div>
+                    </div>
+                `;
+            } else {
+                const groupedByDate = appState.attendanceData.reduce((acc, record) => {
+                    const date = record.timestamp.split('T')[0];
+                    if (!acc[date]) acc[date] = [];
+                    acc[date].push(record);
+                    return acc;
+                }, {});
+
+                Object.keys(groupedByDate).sort().reverse().forEach(date => {
+                    const records = groupedByDate[date];
+                    const presentCount = records.filter(r => r.status === 'present').length;
+
+                    html += `
+                        <div class="history-day">
+                            <div class="day-header">
+                                <div class="day-date">${formatDate(date)}</div>
+                                <div class="day-stats">${presentCount}/${records.length} present</div>
+                            </div>
+                            <div class="day-records">
+                    `;
+
+                    records.forEach(record => {
+                        html += `
+                            <div class="history-record">
+                                <div class="record-section">${record.sectionName}</div>
+                                <div class="record-status ${record.status}">${record.status}</div>
+                                <div class="record-time">${formatTime(record.timestamp)}</div>
+                            </div>
+                        `;
+                    });
+
+                    html += `
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+
+            html += `
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            openModal(html);
+            document.getElementById('sheetClose').addEventListener('click', closeModal);
+        }
+
+        // Calculate overall attendance rate
+        function calculateOverallAttendance() {
+            const totalRecords = appState.attendanceData.length;
+            const presentRecords = appState.attendanceData.filter(a => a.status === 'present').length;
+            return totalRecords > 0 ? Math.round((presentRecords / totalRecords) * 100) : 0;
+        }
+
+        // Calculate student attendance rate
+        function calculateStudentAttendanceRate(studentId, sectionId) {
+            const studentRecords = (appState.sectionAttendance[sectionId] || []).filter(a =>
+                a.userId === studentId
             );
 
-            if (todayRecords.length === 0) {
-                container.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><i class="fas fa-clipboard-check"></i></div><div class="empty-state-title">No attendance today</div><div class="empty-state-description">No attendance records for today yet.</div></div>';
+            if (studentRecords.length === 0) return 0;
+
+            const presentRecords = studentRecords.filter(a => a.status === 'present').length;
+            return Math.round((presentRecords / studentRecords.length) * 100);
+        }
+
+        // Calculate rankings
+        function calculateRankings(sectionId) {
+            const students = appState.students[sectionId] || [];
+            return students.map(student => {
+                const points = appState.plusPoints[sectionId] || 0;
+                const attendanceRate = calculateStudentAttendanceRate(student.id, sectionId);
+                return {
+                    ...student,
+                    points: points,
+                    attendanceRate: attendanceRate,
+                    score: (points * 10) + attendanceRate
+                };
+            }).sort((a, b) => b.score - a.score);
+        }
+
+        // Add plus points
+        async function addPlusPoints(studentId, sectionId, points) {
+            try {
+                const plusPointsRef = db.collection('plusPoints').doc(`${studentId}_${sectionId}`);
+                const doc = await plusPointsRef.get();
+
+                if (doc.exists) {
+                    await plusPointsRef.update({
+                        points: firebase.firestore.FieldValue.increment(points),
+                        lastUpdated: new Date().toISOString()
+                    });
+                } else {
+                    await plusPointsRef.set({
+                        userId: studentId,
+                        sectionId: sectionId,
+                        points: points,
+                        lastUpdated: new Date().toISOString()
+                    });
+                }
+
+                showToast(`Added ${points} points to student`);
+            } catch (error) {
+                console.error('Error adding plus points:', error);
+                showToast('Error adding plus points');
+            }
+        }
+
+        // Export data
+        async function exportData() {
+            try {
+                showToast('Preparing data export...');
+
+                const exportData = {
+                    user: {
+                        name: appState.currentUser.name,
+                        email: appState.currentUser.email,
+                        role: appState.currentUser.role,
+                        joinDate: appState.currentUser.joinDate
+                    },
+                    sections: appState.sections,
+                    attendance: appState.attendanceData,
+                    messages: appState.messages,
+                    exportDate: new Date().toISOString()
+                };
+
+                const dataStr = JSON.stringify(exportData, null, 2);
+                const dataBlob = new Blob([dataStr], {
+                    type: 'application/json'
+                });
+                const url = URL.createObjectURL(dataBlob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `nearcheck-export-${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+
+                showToast('Data exported successfully');
+            } catch (error) {
+                console.error('Error exporting data:', error);
+                showToast('Error exporting data');
+            }
+        }
+
+        // Export section attendance
+        async function exportSectionAttendance(sectionId) {
+            try {
+                const section = appState.sections.find(s => s.id === sectionId);
+                if (!section) return;
+
+                const sectionAttendance = appState.sectionAttendance[sectionId] || [];
+
+                let csvContent = 'Date,Student Name,Status,Time,Method\n';
+                sectionAttendance.forEach(record => {
+                    const date = new Date(record.timestamp).toLocaleDateString();
+                    const time = new Date(record.timestamp).toLocaleTimeString();
+                    csvContent += `${date},"${record.userName}",${record.status},${time},${record.method || 'manual'}\n`;
+                });
+
+                const blob = new Blob([csvContent], {
+                    type: 'text/csv'
+                });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `${section.name}-attendance-${new Date().toISOString().split('T')[0]}.csv`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+
+                showToast('Attendance exported successfully');
+            } catch (error) {
+                console.error('Error exporting attendance:', error);
+                showToast('Error exporting attendance');
+            }
+        }
+
+        // Confirm account deletion
+        function confirmDeleteAccount() {
+            let html = `
+                <div class="sheet-header">
+                    <div class="sheet-title" style="color: var(--error);">Delete Account</div>
+                    <button class="sheet-close" id="sheetClose" aria-label="Close">
+                        <span class="material-icons" aria-hidden="true">close</span>
+                    </button>
+                </div>
+                <div class="sheet-content">
+                    <div style="text-align: center; margin-bottom: 24px;">
+                        <span class="material-icons" style="font-size: 48px; color: var(--error); margin-bottom: 16px;">warning</span>
+                        <div class="card-title" style="color: var(--error);">Warning: This action cannot be undone</div>
+                        <p style="color: var(--on-surface-variant); margin-top: 8px;">
+                            All your data, including attendance records and section memberships, will be permanently deleted.
+                        </p>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="confirmPassword" class="form-label">Enter your password to confirm</label>
+                        <input type="password" class="form-input" id="confirmPassword" placeholder="Your current password">
+                    </div>
+                    
+                    <button class="button button-filled" style="width: 100%; background-color: var(--error); margin-top: 24px;" id="confirmDeleteButton" disabled>
+                        <span class="material-icons" style="margin-right: 8px;">delete</span>
+                        Delete My Account
+                    </button>
+                    
+                    <div style="text-align: center; margin-top: 16px;">
+                        <div id="countdown" style="font-size: 14px; color: var(--on-surface-variant);">
+                            Confirm button will be enabled in <span id="countdownSeconds">5</span> seconds
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            openModal(html);
+
+            const confirmButton = document.getElementById('confirmDeleteButton');
+            const countdownElement = document.getElementById('countdownSeconds');
+            const passwordInput = document.getElementById('confirmPassword');
+            const closeButton = document.getElementById('sheetClose');
+
+            let countdown = 5;
+            const countdownInterval = setInterval(() => {
+                countdown--;
+                countdownElement.textContent = countdown;
+
+                if (countdown <= 0) {
+                    clearInterval(countdownInterval);
+                    confirmButton.disabled = false;
+                    document.getElementById('countdown').style.display = 'none';
+                }
+            }, 1000);
+
+            passwordInput.addEventListener('input', () => {
+                confirmButton.disabled = passwordInput.value.length === 0;
+            });
+
+            confirmButton.addEventListener('click', () => {
+                deleteAccount(passwordInput.value);
+            });
+
+            closeButton.addEventListener('click', closeModal);
+        }
+
+        // Delete account
+        async function deleteAccount(password) {
+            try {
+                showToast('Verifying password...');
+
+                const credential = firebase.auth.EmailAuthProvider.credential(
+                    appState.currentUser.email,
+                    password
+                );
+
+                await auth.currentUser.reauthenticateWithCredential(credential);
+
+                showToast('Deleting account and all data...');
+
+                await db.collection('users').doc(appState.currentUser.id).delete();
+
+                const attendanceSnapshot = await db.collection('attendance')
+                    .where('userId', '==', appState.currentUser.id)
+                    .get();
+
+                const deleteAttendancePromises = attendanceSnapshot.docs.map(doc => doc.ref.delete());
+                await Promise.all(deleteAttendancePromises);
+
+                const sectionsSnapshot = await db.collection('sections')
+                    .where('students', 'array-contains', appState.currentUser.id)
+                    .get();
+
+                const updateSectionsPromises = sectionsSnapshot.docs.map(doc =>
+                    doc.ref.update({
+                        students: firebase.firestore.FieldValue.arrayRemove(appState.currentUser.id)
+                    })
+                );
+                await Promise.all(updateSectionsPromises);
+
+                const user = auth.currentUser;
+                await user.delete();
+
+                closeModal();
+                showToast('Account deleted successfully');
+                showLanding();
+            } catch (error) {
+                console.error('Error deleting account:', error);
+                showToast('Error deleting account. Please check your password and try again.');
+            }
+        }
+
+        // Create section modal
+        function openCreateSectionModal() {
+            let html = `
+                <div class="sheet-header">
+                    <div class="sheet-title">Create New Section</div>
+                    <button class="sheet-close" id="sheetClose" aria-label="Close">
+                        <span class="material-icons" aria-hidden="true">close</span>
+                    </button>
+                </div>
+                <div class="sheet-content">
+                    <div id="createSectionForm">
+                        <div class="form-group">
+                            <label for="sectionName" class="form-label">Section Name</label>
+                            <input type="text" class="form-input" id="sectionName" placeholder="e.g., Advanced Web Development">
+                        </div>
+                        <div class="form-group">
+                            <label for="sectionSubject" class="form-label">Subject</label>
+                            <input type="text" class="form-input" id="sectionSubject" placeholder="e.g., Computer Science">
+                        </div>
+                        <div class="form-group">
+                            <label for="sectionSchedule" class="form-label">Schedule</label>
+                            <input type="text" class="form-input" id="sectionSchedule" placeholder="e.g., Mon, Wed, Fri 10:00 AM">
+                        </div>
+                        <div class="form-group">
+                            <label for="sectionMeetLink" class="form-label">Google Meet Link (Optional)</label>
+                            <input type="url" class="form-input" id="sectionMeetLink" placeholder="https://meet.google.com/abc-defg-hij">
+                        </div>
+                        <div class="form-group">
+                            <label for="sectionRadius" class="form-label">Location Radius (meters)</label>
+                            <input type="range" class="form-input" id="sectionRadius" min="5" max="70" value="${appState.settings.defaultRadius}" oninput="document.getElementById('createRadiusValue').textContent = this.value + ' meters'">
+                            <div style="text-align: center; margin-top: 8px;" id="createRadiusValue">${appState.settings.defaultRadius} meters</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="sectionEmoji" class="form-label">Section Emoji</label>
+                            <input type="text" class="form-input" id="sectionEmoji" value="📚" maxlength="2">
+                        </div>
+                        <div class="form-group">
+                            <label class="toggle">
+                                <input type="checkbox" id="autoCheckInToggle" checked>
+                                <span class="toggle-slider"></span>
+                                <span style="margin-left: 12px;">Enable Auto Check-In for students</span>
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label class="toggle">
+                                <input type="checkbox" id="remoteCheckInToggle">
+                                <span class="toggle-slider"></span>
+                                <span style="margin-left: 12px;">Allow Remote Check-In (without GPS)</span>
+                            </label>
+                        </div>
+                        <button class="button button-filled" style="width: 100%;" onclick="createSection()">
+                            <span class="material-icons" style="margin-right: 8px;">add</span>
+                            Create Section
+                        </button>
+                    </div>
+                    <div id="createSectionLoading" style="display: none; text-align: center; padding: 40px;">
+                        <div class="loading-spinner" style="margin: 0 auto 16px;"></div>
+                        <div>Creating section and configuring location...</div>
+                    </div>
+                </div>
+            `;
+
+            openModal(html);
+            document.getElementById('sheetClose').addEventListener('click', closeModal);
+        }
+
+        // Join section modal
+        function openJoinSectionModal() {
+            let html = `
+                <div class="sheet-header">
+                    <div class="sheet-title">Join a Section</div>
+                    <button class="sheet-close" id="sheetClose" aria-label="Close">
+                        <span class="material-icons" aria-hidden="true">close</span>
+                    </button>
+                </div>
+                <div class="sheet-content">
+                    <div class="form-group">
+                        <label for="sectionCode" class="form-label">Section Code</label>
+                        <input type="text" class="form-input" id="sectionCode" placeholder="Enter 6-digit code">
+                    </div>
+                    <button class="button button-filled" style="width: 100%; margin-top: 24px;" onclick="joinSection()">Join Section</button>
+                    <div style="text-align: center; margin-top: 16px;">
+                        <div style="font-size: 14px; color: var(--on-surface-variant);">or</div>
+                        <button class="button button-tonal" style="width: 100%; margin-top: 12px;" onclick="scanQRCode()">
+                            <span class="material-icons" style="margin-right: 8px;">qr_code_scanner</span>
+                            Scan QR Code
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            openModal(html);
+            document.getElementById('sheetClose').addEventListener('click', closeModal);
+        }
+
+        // Create a new section
+        async function createSection() {
+            const name = sanitizeInput(document.getElementById('sectionName').value);
+            const subject = sanitizeInput(document.getElementById('sectionSubject').value);
+            const schedule = sanitizeInput(document.getElementById('sectionSchedule').value);
+            const meetLink = document.getElementById('sectionMeetLink')?.value || '';
+            const radius = parseInt(document.getElementById('sectionRadius').value);
+            const emoji = sanitizeInput(document.getElementById('sectionEmoji').value);
+            const autoCheckIn = document.getElementById('autoCheckInToggle').checked;
+            const remoteCheckIn = document.getElementById('remoteCheckInToggle').checked;
+
+            if (!name || !subject || !schedule) {
+                showToast('Please fill in all required fields');
+                return;
+            }
+
+            document.getElementById('createSectionForm').style.display = 'none';
+            document.getElementById('createSectionLoading').style.display = 'block';
+
+            try {
+                const position = await getCurrentPosition();
+
+                const newSection = {
+                    name,
+                    subject,
+                    teacherId: appState.currentUser.id,
+                    teacherName: appState.currentUser.name,
+                    emoji: emoji || '📚',
+                    students: [],
+                    active: false,
+                    schedule,
+                    meetLink,
+                    location: {
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude
+                    },
+                    radius: radius,
+                    autoCheckIn,
+                    remoteCheckIn,
+                    color: appState.nearId.identityColor,
+                    createdAt: new Date().toISOString(),
+                    joinCode: generateJoinCode()
+                };
+
+                await db.collection('sections').add(newSection);
+
+                closeModal();
+                showToast(`Section "${name}" created successfully`);
+            } catch (error) {
+                console.error('Error creating section:', error);
+                document.getElementById('createSectionForm').style.display = 'block';
+                document.getElementById('createSectionLoading').style.display = 'none';
+                showToast('Error creating section. Please try again.');
+            }
+        }
+
+        // Join a section
+        async function joinSection() {
+            const code = document.getElementById('sectionCode').value.trim().toUpperCase();
+
+            if (!code) {
+                showToast('Please enter a section code');
+                return;
+            }
+
+            try {
+                const sectionsSnapshot = await db.collection('sections')
+                    .where('joinCode', '==', code)
+                    .get();
+
+                if (sectionsSnapshot.empty) {
+                    showToast('Invalid section code');
+                    return;
+                }
+
+                const sectionDoc = sectionsSnapshot.docs[0];
+                const section = sectionDoc.data();
+
+                await db.collection('sections').doc(sectionDoc.id).update({
+                    students: firebase.firestore.FieldValue.arrayUnion(appState.currentUser.id)
+                });
+
+                closeModal();
+                showToast(`Joined section "${section.name}" successfully`);
+            } catch (error) {
+                console.error('Error joining section:', error);
+                showToast('Error joining section. Please try again.');
+            }
+        }
+
+        // Scan QR code
+        function scanQRCode() {
+            if (!('BarcodeDetector' in window)) {
+                showToast('QR code scanning is not supported in this browser');
                 return;
             }
 
             let html = `
-                <div style="overflow-x: auto;">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Student</th>
-                                <th>Section</th>
-                                <th>Time</th>
-                                <th>Status</th>
-                                <th>Method</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
+                <div class="sheet-header">
+                    <div class="sheet-title">Scan QR Code</div>
+                    <button class="sheet-close" id="sheetClose" aria-label="Close">
+                        <span class="material-icons" aria-hidden="true">close</span>
+                    </button>
+                </div>
+                <div class="sheet-content" style="text-align: center;">
+                    <div id="qrScanner" style="width: 300px; height: 300px; margin: 0 auto 24px; background-color: #000; border-radius: 12px; overflow: hidden;"></div>
+                    <div style="font-size: 14px; color: var(--on-surface-variant); margin-bottom: 16px;">
+                        Point your camera at a NearCheck+ QR code
+                    </div>
+                    <button class="button button-filled" onclick="startQRScanner()">
+                        Start Scanner
+                    </button>
+                </div>
             `;
 
-            // Get student details for today's records
-            const studentIds = [...new Set(todayRecords.map(record => record.studentId))];
-            const studentPromises = studentIds.map(studentId =>
-                db.collection('users').doc(studentId).get()
-            );
+            openModal(html);
+            document.getElementById('sheetClose').addEventListener('click', closeModal);
+        }
 
-            Promise.all(studentPromises).then(studentDocs => {
-                const students = {};
-                studentDocs.forEach(doc => {
-                    if (doc.exists) {
-                        students[doc.id] = doc.data();
+        // Start QR scanner
+        async function startQRScanner() {
+            const video = document.createElement('video');
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            const container = document.getElementById('qrScanner');
+
+            container.innerHTML = '';
+            container.appendChild(video);
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment'
                     }
                 });
+                video.srcObject = stream;
+                video.play();
 
-                todayRecords.forEach(record => {
-                    const student = students[record.studentId] || {
-                        name: 'Unknown Student'
-                    };
-                    const section = state.sections.find(s => s.id === record.sectionId) || {
-                        name: 'Unknown Section'
-                    };
+                const barcodeDetector = new BarcodeDetector({
+                    formats: ['qr_code']
+                });
+
+                const scanFrame = () => {
+                    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                        barcodeDetector.detect(canvas)
+                            .then(barcodes => {
+                                if (barcodes.length > 0) {
+                                    const url = barcodes[0].rawValue;
+                                    const codeMatch = url.match(/code=([A-Z0-9]+)/);
+                                    if (codeMatch) {
+                                        const code = codeMatch[1];
+                                        document.getElementById('sectionCode').value = code;
+                                        closeModal();
+                                        joinSection();
+                                        trackFeatureUsage('qrScan');
+                                    }
+                                }
+                                requestAnimationFrame(scanFrame);
+                            })
+                            .catch(console.error);
+                    } else {
+                        requestAnimationFrame(scanFrame);
+                    }
+                };
+
+                scanFrame();
+            } catch (error) {
+                console.error('Error starting QR scanner:', error);
+                showToast('Error accessing camera');
+            }
+        }
+
+        // Open fullscreen search
+        function openFullscreenSearch() {
+            elements.fullscreenTitle.textContent = 'Search';
+            let html = `
+                <div class="search-container">
+                    <div class="search-bar">
+                        <span class="material-icons">search</span>
+                        <input type="text" id="fullscreenSearchInput" placeholder="Search sections, students, messages..." autofocus>
+                    </div>
+                    
+                    <div class="search-results" id="searchResults">
+                        <div class="search-section">
+                            <div class="search-section-title">Recent Searches</div>
+                            <div class="search-tags">
+                                <div class="search-tag" onclick="search('Web Development')">Web Development</div>
+                                <div class="search-tag" onclick="search('Mobile Design')">Mobile Design</div>
+                                <div class="search-tag" onclick="search('Privacy')">Privacy</div>
+                                <div class="search-tag" onclick="search('Attendance')">Attendance</div>
+                            </div>
+                        </div>
+                        
+                        <div class="search-section">
+                            <div class="search-section-title">Quick Access</div>
+                            <div class="quick-access-grid">
+                                <div class="quick-access-item" onclick="loadPage('sections')">
+                                    <span class="material-icons">class</span>
+                                    <span>Sections</span>
+                                </div>
+                                <div class="quick-access-item" onclick="loadPage('messages')">
+                                    <span class="material-icons">chat</span>
+                                    <span>Messages</span>
+                                </div>
+                                ${appState.currentUser.role === 'teacher' ? `
+                                <div class="quick-access-item" onclick="loadPage('sessions')">
+                                    <span class="material-icons">location_on</span>
+                                    <span>Sessions</span>
+                                </div>
+                                ` : ''}
+                                <div class="quick-access-item" onclick="loadPage('settings')">
+                                    <span class="material-icons">settings</span>
+                                    <span>Settings</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            elements.fullscreenContent.innerHTML = html;
+            elements.fullscreenModal.style.display = 'block';
+
+            setTimeout(() => {
+                const searchInput = document.getElementById('fullscreenSearchInput');
+                if (searchInput) {
+                    searchInput.focus();
+                    searchInput.addEventListener('input', handleSearch);
+                }
+            }, 100);
+        }
+
+        // Handle search
+        function handleSearch(e) {
+            const query = e.target.value.toLowerCase().trim();
+            const searchResults = document.getElementById('searchResults');
+
+            if (!query) {
+                searchResults.innerHTML = `
+                    <div class="search-section">
+                        <div class="search-section-title">Recent Searches</div>
+                        <div class="search-tags">
+                            <div class="search-tag" onclick="search('Web Development')">Web Development</div>
+                            <div class="search-tag" onclick="search('Mobile Design')">Mobile Design</div>
+                            <div class="search-tag" onclick="search('Privacy')">Privacy</div>
+                            <div class="search-tag" onclick="search('Attendance')">Attendance</div>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            const filteredSections = appState.sections.filter(section =>
+                section.name.toLowerCase().includes(query) ||
+                section.subject.toLowerCase().includes(query) ||
+                section.teacherName.toLowerCase().includes(query)
+            );
+
+            const filteredMessages = appState.messages.filter(message =>
+                message.content.toLowerCase().includes(query) ||
+                message.sender.toLowerCase().includes(query) ||
+                (message.sectionName && message.sectionName.toLowerCase().includes(query))
+            );
+
+            let html = '';
+
+            if (filteredSections.length > 0) {
+                html += `
+                    <div class="search-section">
+                        <div class="search-section-title">Sections (${filteredSections.length})</div>
+                        <div class="search-list">
+                `;
+
+                filteredSections.forEach(section => {
+                    html += `
+                        <div class="search-item" onclick="openSectionDetails('${section.id}'); closeFullscreen()">
+                            <div class="search-item-icon">${section.emoji}</div>
+                            <div class="search-item-content">
+                                <div class="search-item-title">${section.name}</div>
+                                <div class="search-item-subtitle">${section.subject} • ${section.teacherName}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += `</div></div>`;
+            }
+
+            if (filteredMessages.length > 0) {
+                html += `
+                    <div class="search-section">
+                        <div class="search-section-title">Messages (${filteredMessages.length})</div>
+                        <div class="search-list">
+                `;
+
+                filteredMessages.forEach(message => {
+                    html += `
+                        <div class="search-item" onclick="openMessageDetails('${message.id}'); closeFullscreen()">
+                            <div class="search-item-icon">
+                                <span class="material-icons">${message.type === 'announcement' ? 'campaign' : 'notifications'}</span>
+                            </div>
+                            <div class="search-item-content">
+                                <div class="search-item-title">${message.sender}</div>
+                                <div class="search-item-subtitle">${message.content.substring(0, 60)}${message.content.length > 60 ? '...' : ''}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += `</div></div>`;
+            }
+
+            if (filteredSections.length === 0 && filteredMessages.length === 0) {
+                html = `
+                    <div class="empty-state">
+                        <span class="material-icons">search_off</span>
+                        <div>No results found for "${query}"</div>
+                        <div style="font-size: 14px; color: var(--on-surface-variant); margin-top: 8px;">
+                            Try searching for section names, subjects, or message content
+                        </div>
+                `;
+            }
+
+            searchResults.innerHTML = html;
+        }
+
+        // Search function
+        function search(query) {
+            const searchInput = document.getElementById('fullscreenSearchInput');
+            if (searchInput) {
+                searchInput.value = query;
+                searchInput.dispatchEvent(new Event('input'));
+            }
+        }
+
+        // Open fullscreen notifications
+        function openFullscreenNotifications() {
+            elements.fullscreenTitle.textContent = 'Notifications';
+
+            const unreadMessages = appState.messages.filter(msg =>
+                !msg.read || (msg.read && !msg.read.includes(appState.currentUser.id))
+            );
+
+            let html = `
+                <div class="notifications-container">
+                    <div class="notifications-header">
+                        <div class="notifications-count">${unreadMessages.length} Unread</div>
+                        <button class="button button-text" onclick="markAllAsRead()">
+                            Mark all as read
+                        </button>
+                    </div>
+                    
+                    <div class="notifications-list">
+            `;
+
+            if (unreadMessages.length === 0) {
+                html += `
+                    <div class="empty-state">
+                        <span class="material-icons">notifications_off</span>
+                        <div>No new notifications</div>
+                        <div style="font-size: 14px; color: var(--on-surface-variant); margin-top: 8px;">
+                            You're all caught up!
+                        </div>
+                    </div>
+                `;
+            } else {
+                unreadMessages.forEach(message => {
+                    html += `
+                        <div class="notification-item" onclick="openMessageDetails('${message.id}'); closeFullscreen()">
+                            <div class="notification-icon">
+                                <span class="material-icons">${message.type === 'announcement' ? 'campaign' : 'notifications'}</span>
+                            </div>
+                            <div class="notification-content">
+                                <div class="notification-title">${message.sender}</div>
+                                <div class="notification-text">${message.content.substring(0, 100)}${message.content.length > 100 ? '...' : ''}</div>
+                                <div class="notification-meta">
+                                    <span>${message.sectionName || ''}</span>
+                                    <span>•</span>
+                                    <span>${formatTime(message.timestamp)}</span>
+                                </div>
+                            </div>
+                            <div class="notification-actions">
+                                <button class="button button-text" onclick="event.stopPropagation(); markAsRead('${message.id}')">
+                                    <span class="material-icons">check</span>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+
+            html += `
+                    </div>
+                    
+                    <div class="notifications-footer">
+                        <button class="button button-outlined" style="width: 100%;" onclick="loadPage('messages'); closeFullscreen()">
+                            View All Messages
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            elements.fullscreenContent.innerHTML = html;
+            elements.fullscreenModal.style.display = 'block';
+        }
+
+        // Mark all as read
+        async function markAllAsRead() {
+            const unreadMessages = appState.messages.filter(msg =>
+                !msg.read || (msg.read && !msg.read.includes(appState.currentUser.id))
+            );
+
+            try {
+                const batch = db.batch();
+                unreadMessages.forEach(message => {
+                    const messageRef = db.collection('messages').doc(message.id);
+                    batch.update(messageRef, {
+                        read: firebase.firestore.FieldValue.arrayUnion(appState.currentUser.id)
+                    });
+                });
+
+                await batch.commit();
+                showToast('All messages marked as read');
+                closeFullscreen();
+                updateNotificationBadge();
+            } catch (error) {
+                console.error('Error marking messages as read:', error);
+                showToast('Error marking messages as read');
+            }
+        }
+
+        // Mark as read
+        async function markAsRead(messageId) {
+            try {
+                await db.collection('messages').doc(messageId).update({
+                    read: firebase.firestore.FieldValue.arrayUnion(appState.currentUser.id)
+                });
+
+                const messageIndex = appState.messages.findIndex(msg => msg.id === messageId);
+                if (messageIndex !== -1) {
+                    if (!appState.messages[messageIndex].read) {
+                        appState.messages[messageIndex].read = [];
+                    }
+                    appState.messages[messageIndex].read.push(appState.currentUser.id);
+                }
+
+                updateNotificationBadge();
+
+                const notificationItem = document.querySelector(`.notification-item[onclick*="${messageId}"]`);
+                if (notificationItem) {
+                    notificationItem.style.opacity = '0.6';
+                }
+
+                showToast('Message marked as read');
+            } catch (error) {
+                console.error('Error marking message as read:', error);
+                showToast('Error marking message as read');
+            }
+        }
+
+        // Open message details
+        async function openMessageDetails(messageId) {
+            const message = appState.messages.find(msg => msg.id === messageId);
+            if (!message) return;
+
+            await markAsRead(messageId);
+
+            let html = `
+                <div class="sheet-header">
+                    <div class="sheet-title">Message</div>
+                    <button class="sheet-close" id="sheetClose" aria-label="Close">
+                        <span class="material-icons" aria-hidden="true">close</span>
+                    </button>
+                </div>
+                <div class="sheet-content">
+                    <div class="message-details">
+                        <div class="message-header">
+                            <div class="profile-avatar-small">${message.senderAvatar || '👤'}</div>
+                            <div>
+                                <div class="message-sender">${message.sender}</div>
+                                <div class="message-time">${formatDate(message.timestamp)} at ${formatTime(message.timestamp)}</div>
+                                ${message.sectionName ? `<div class="message-section">${message.sectionName}</div>` : ''}
+                            </div>
+                        </div>
+                        <div class="message-content">
+                            ${message.content}
+                        </div>
+                        <div class="message-actions">
+                            <button class="button button-tonal" onclick="replyToMessage('${message.id}')">
+                                <span class="material-icons">reply</span>
+                                Reply
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            openModal(html);
+            document.getElementById('sheetClose').addEventListener('click', closeModal);
+        }
+
+        // Reply to message
+        function replyToMessage(messageId) {
+            const message = appState.messages.find(msg => msg.id === messageId);
+            if (!message) return;
+
+            closeModal();
+
+            if (message.sectionId) {
+                openSectionDetails(message.sectionId);
+                setTimeout(() => {
+                    const announcementInput = document.getElementById('announcementInput');
+                    if (announcementInput) {
+                        announcementInput.value = `Re: ${message.content.substring(0, 50)}...`;
+                        announcementInput.focus();
+                    }
+                }, 100);
+            }
+        }
+
+        // Open navigation drawer
+        function openNavigationDrawer() {
+            let html = `
+                <div class="sheet-header">
+                    <div class="sheet-title">Navigation</div>
+                    <button class="sheet-close" id="sheetClose" aria-label="Close">
+                        <span class="material-icons" aria-hidden="true">close</span>
+                    </button>
+                </div>
+                <div class="sheet-content">
+                    <div class="user-info" style="display: flex; align-items: center; gap: 12px; margin-bottom: 24px; padding: 16px; background-color: var(--surface-variant); border-radius: var(--radius-md);">
+                        <div class="profile-avatar-small">${appState.nearId.profileEmoji}</div>
+                        <div>
+                            <div style="font-weight: 500;">${appState.currentUser.name}</div>
+                            <div style="font-size: 14px; color: var(--on-surface-variant);">${appState.currentUser.role === 'teacher' ? 'Teacher' : 'Student'}</div>
+                            <div style="font-size: 12px; color: var(--on-surface-variant);">${appState.currentUser.email}</div>
+                        </div>
+                    </div>
+                    <ul class="list">
+                        <li class="list-item" onclick="loadPage('dashboard'); closeModal()">
+                            <div class="list-item-icon">
+                                <span class="material-icons">dashboard</span>
+                            </div>
+                            <div class="list-item-content">
+                                <div class="list-item-title">Dashboard</div>
+                            </div>
+                        </li>
+                        <li class="list-item" onclick="loadPage('sections'); closeModal()">
+                            <div class="list-item-icon">
+                                <span class="material-icons">class</span>
+                            </div>
+                            <div class="list-item-content">
+                                <div class="list-item-title">Sections</div>
+                            </div>
+                        </li>
+                        ${appState.currentUser.role === 'teacher' ? `
+                        <li class="list-item" onclick="loadPage('sessions'); closeModal()">
+                            <div class="list-item-icon">
+                                <span class="material-icons">location_on</span>
+                            </div>
+                            <div class="list-item-content">
+                                <div class="list-item-title">Sessions</div>
+                            </div>
+                        </li>
+                        ` : ''}
+                        <li class="list-item" onclick="loadPage('messages'); closeModal()">
+                            <div class="list-item-icon">
+                                <span class="material-icons">chat</span>
+                            </div>
+                            <div class="list-item-content">
+                                <div class="list-item-title">Messages</div>
+                            </div>
+                        </li>
+                        <li class="list-item" onclick="loadPage('settings'); closeModal()">
+                            <div class="list-item-icon">
+                                <span class="material-icons">settings</span>
+                            </div>
+                            <div class="list-item-content">
+                                <div class="list-item-title">Settings</div>
+                            </div>
+                        </li>
+                    </ul>
+                    <button class="button button-text" style="width: 100%; margin-top: 24px; color: var(--error);" onclick="logoutUser(); closeModal()">
+                        <span class="material-icons" style="margin-right: 8px;">logout</span>
+                        Logout
+                    </button>
+                </div>
+            `;
+
+            openModal(html);
+            document.getElementById('sheetClose').addEventListener('click', closeModal);
+        }
+
+        // Get current position with error handling
+        function getCurrentPosition() {
+            return new Promise((resolve, reject) => {
+                if (!navigator.geolocation) {
+                    reject(new Error('Geolocation is not supported by this browser'));
+                    return;
+                }
+
+                navigator.geolocation.getCurrentPosition(resolve, reject, {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                });
+            });
+        }
+
+        // Calculate distance between two coordinates in meters
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371000;
+            const φ1 = lat1 * Math.PI / 180;
+            const φ2 = lat2 * Math.PI / 180;
+            const Δφ = (lat2 - lat1) * Math.PI / 180;
+            const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+            const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                Math.cos(φ1) * Math.cos(φ2) *
+                Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+            return R * c;
+        }
+
+        // Perform manual check-in
+        async function performManualCheckIn() {
+            if (appState.currentUser.role !== 'student') {
+                showToast('Only students can check in');
+                return;
+            }
+
+            const activeSessions = appState.activeSessions.filter(session =>
+                session.students && session.students.includes(appState.currentUser.id)
+            );
+
+            if (activeSessions.length === 0) {
+                showToast('No active sessions available');
+                return;
+            }
+
+            if (activeSessions.length === 1) {
+                await performCheckIn(activeSessions[0].id, 'manual');
+            } else {
+                let html = `
+                    <div class="sheet-header">
+                        <div class="sheet-title">Select Session to Check In</div>
+                        <button class="sheet-close" id="sheetClose" aria-label="Close">
+                            <span class="material-icons" aria-hidden="true">close</span>
+                        </button>
+                    </div>
+                    <div class="sheet-content">
+                        <div class="list">
+                `;
+
+                activeSessions.forEach(session => {
+                    const section = appState.sections.find(s => s.id === session.sectionId);
+                    if (!section) return;
 
                     html += `
-                        <tr>
-                            <td>${student.name}</td>
-                            <td>${section.name}</td>
-                            <td>${new Date(record.timestamp).toLocaleTimeString()}</td>
-                            <td>
-                                <span class="status-badge status-${record.status}">
-                                    ${record.status.charAt(0).toUpperCase() + record.status.slice(1)}
-                                </span>
-                            </td>
-                            <td>${record.method || 'Auto'}</td>
-                            <td>
-                                <select class="form-control" onchange="updateAttendanceStatus('${record.id}', this.value)" style="width: 120px;">
-                                    <option value="present" ${record.status === 'present' ? 'selected' : ''}>Present</option>
-                                    <option value="absent" ${record.status === 'absent' ? 'selected' : ''}>Absent</option>
-                                    <option value="late" ${record.status === 'late' ? 'selected' : ''}>Late</option>
-                                    <option value="excused" ${record.status === 'excused' ? 'selected' : ''}>Excused</option>
-                                </select>
-                            </td>
-                        </tr>
+                        <div class="list-item" onclick="performCheckIn('${session.id}', 'manual'); closeModal()">
+                            <div class="list-item-icon">
+                                <span class="material-icons">location_on</span>
+                            </div>
+                            <div class="list-item-content">
+                                <div class="list-item-title">${section.name}</div>
+                                <div class="list-item-subtitle">${section.subject}</div>
+                            </div>
+                        </div>
                     `;
                 });
 
                 html += `
-                        </tbody>
-                    </table>
-                </div>
+                        </div>
+                    </div>
                 `;
 
-                container.innerHTML = html;
-            });
+                openModal(html);
+                document.getElementById('sheetClose').addEventListener('click', closeModal);
+            }
         }
 
-        function loadStudentAttendance() {
-            const container = document.getElementById('studentAttendanceTableContainer');
-            const summaryContainer = document.getElementById('studentAttendanceSummary');
-
-            if (!container) return;
-
-            const studentAttendance = state.attendance.filter(a =>
-                a.studentId === state.currentUser.uid
-            );
-
-            if (studentAttendance.length === 0) {
-                container.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><i class="fas fa-clipboard-check"></i></div><div class="empty-state-title">No attendance records</div><div class="empty-state-description">Your attendance records will appear here once you start checking in.</div></div>';
-                if (summaryContainer) summaryContainer.innerHTML = '<p>No attendance data available.</p>';
+        // Perform check-in
+        async function performCheckIn(sessionId, method = 'manual') {
+            const session = appState.activeSessions.find(s => s.id === sessionId);
+            if (!session) {
+                showToast('Session not found');
                 return;
             }
 
-            studentAttendance.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            try {
+                appState.checkInStatus.checkingIn = true;
 
-            let html = `
-                <div style="overflow-x: auto;">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Section</th>
-                                <th>Time</th>
-                                <th>Status</th>
-                                <th>Method</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-            `;
+                const position = await getCurrentPosition();
+                const distance = calculateDistance(
+                    position.coords.latitude,
+                    position.coords.longitude,
+                    session.location.lat,
+                    session.location.lng
+                );
 
-            studentAttendance.forEach(record => {
-                const section = state.sections.find(s => s.id === record.sectionId) || {
-                    name: 'Unknown Section'
+                const inRange = distance <= session.radius;
+
+                if (!inRange && method === 'manual' && !session.remoteCheckIn) {
+                    showToast(`You are ${Math.round(distance)}m away. Must be within ${session.radius}m to check in.`);
+                    appState.checkInStatus.checkingIn = false;
+                    return;
+                }
+
+                const attendanceRecord = {
+                    userId: appState.currentUser.id,
+                    userName: appState.currentUser.name,
+                    userAvatar: appState.nearId.profileEmoji,
+                    sessionId: sessionId,
+                    sectionId: session.sectionId,
+                    sectionName: session.sectionName,
+                    status: inRange ? 'present' : (session.remoteCheckIn ? 'present' : 'absent'),
+                    method: method,
+                    timestamp: new Date().toISOString(),
+                    location: {
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude,
+                        accuracy: position.coords.accuracy
+                    },
+                    distance: distance,
+                    inRange: inRange,
+                    deviceId: appState.security.deviceId
                 };
-                const date = new Date(record.timestamp);
+
+                await db.collection('attendance').add(attendanceRecord);
+
+                await db.collection('sessions').doc(sessionId).update({
+                    checkedInCount: firebase.firestore.FieldValue.increment(1)
+                });
+
+                appState.checkInStatus.lastCheckIn = new Date().toISOString();
+                appState.checkInStatus.checkingIn = false;
+
+                showToast(inRange ? 'Checked in successfully!' : 'Checked in (out of range)');
+                trackFeatureUsage(method === 'manual' ? 'manualCheckIn' : 'checkIn');
+
+                if (appState.currentPage === 'dashboard' || appState.currentPage === 'sections') {
+                    loadPage(appState.currentPage);
+                }
+            } catch (error) {
+                console.error('Error checking in:', error);
+                appState.checkInStatus.checkingIn = false;
+                showToast('Error checking in: ' + error.message);
+            }
+        }
+
+        // Update section check-in status
+        async function updateSectionCheckInStatus(section) {
+            const checkInStatusElement = document.getElementById('sectionCheckInStatus');
+            if (!checkInStatusElement) return;
+
+            const activeSession = appState.activeSessions.find(s => s.sectionId === section.id);
+            if (!activeSession) {
+                checkInStatusElement.innerHTML = '<span>No active session</span>';
+                return;
+            }
+
+            try {
+                const position = await getCurrentPosition();
+                const distance = calculateDistance(
+                    position.coords.latitude,
+                    position.coords.longitude,
+                    activeSession.location.lat,
+                    activeSession.location.lng
+                );
+
+                const inRange = distance <= activeSession.radius;
+
+                checkInStatusElement.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span class="material-icons" style="color: ${inRange ? 'var(--success)' : 'var(--error)'};">${inRange ? 'check_circle' : 'location_off'}</span>
+                        <span>${inRange ? 'In range - Ready to check in' : `Out of range (${Math.round(distance)}m)`}</span>
+                    </div>
+                    ${inRange ? `
+                    <button class="button button-filled" onclick="performCheckIn('${activeSession.id}', 'manual')">
+                        Check In Now
+                    </button>
+                    ` : activeSession.remoteCheckIn ? `
+                    <button class="button button-filled" onclick="performCheckIn('${activeSession.id}', 'remote')">
+                        Remote Check-In
+                    </button>
+                    ` : ''}
+                `;
+            } catch (error) {
+                checkInStatusElement.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span class="material-icons" style="color: var(--warning);">warning</span>
+                        <span>Location access required</span>
+                    </div>
+                    ${activeSession.remoteCheckIn ? `
+                    <button class="button button-filled" onclick="performCheckIn('${activeSession.id}', 'remote')">
+                        Remote Check-In
+                    </button>
+                    ` : ''}
+                `;
+            }
+        }
+
+        // End session
+        async function endSession(sessionId) {
+            const session = appState.activeSessions.find(s => s.id === sessionId);
+            if (!session) {
+                showToast('Session not found');
+                return;
+            }
+
+            if (!confirm(`End session for ${session.sectionName}?`)) {
+                return;
+            }
+
+            try {
+                await db.collection('sessions').doc(sessionId).update({
+                    active: false,
+                    endTime: new Date().toISOString()
+                });
+
+                await db.collection('sections').doc(session.sectionId).update({
+                    active: false,
+                    currentSession: null
+                });
+
+                showToast('Session ended successfully');
+                loadPage('sessions');
+            } catch (error) {
+                console.error('Error ending session:', error);
+                showToast('Error ending session');
+            }
+        }
+
+        // Open session details
+        async function openSessionDetails(sessionId) {
+            const session = appState.activeSessions.find(s => s.id === sessionId);
+            if (!session) return;
+
+            try {
+                const attendanceSnapshot = await db.collection('attendance')
+                    .where('sessionId', '==', sessionId)
+                    .orderBy('timestamp', 'desc')
+                    .get();
+
+                const attendanceRecords = attendanceSnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+
+                let html = `
+                    <div class="sheet-header">
+                        <div class="sheet-title">Session Details</div>
+                        <button class="sheet-close" id="sheetClose" aria-label="Close">
+                            <span class="material-icons" aria-hidden="true">close</span>
+                        </button>
+                    </div>
+                    <div class="sheet-content">
+                        <div class="session-info">
+                            <div class="session-header">
+                                <div class="session-emoji">📊</div>
+                                <div>
+                                    <div class="session-name">${session.sectionName}</div>
+                                    <div class="session-subtitle">${formatDate(session.startTime)} • Started ${formatTime(session.startTime)}</div>
+                                </div>
+                            </div>
+                            
+                            <div class="session-stats-grid">
+                                <div class="session-stat">
+                                    <div class="session-stat-value">${attendanceRecords.filter(a => a.status === 'present').length}</div>
+                                    <div class="session-stat-label">Present</div>
+                                </div>
+                                <div class="session-stat">
+                                    <div class="session-stat-value">${attendanceRecords.filter(a => a.status === 'absent').length}</div>
+                                    <div class="session-stat-label">Absent</div>
+                                </div>
+                                <div class="session-stat">
+                                    <div class="session-stat-value">${session.radius}m</div>
+                                    <div class="session-stat-label">Radius</div>
+                                </div>
+                                <div class="session-stat">
+                                    <div class="session-stat-value">${formatSessionDuration(session.startTime)}</div>
+                                    <div class="session-stat-label">Duration</div>
+                                </div>
+                            </div>
+                            
+                            <div class="attendance-list">
+                                <div class="attendance-table">
+                                    <div class="table-header">
+                                        <div>Student</div>
+                                        <div>Status</div>
+                                        <div>Time</div>
+                                        <div>Distance</div>
+                                    </div>
+                `;
+
+                if (attendanceRecords.length === 0) {
+                    html += `
+                        <div class="table-empty">
+                            No attendance records yet
+                        </div>
+                    `;
+                } else {
+                    attendanceRecords.forEach(record => {
+                        html += `
+                            <div class="table-row">
+                                <div class="student-cell">
+                                    <div class="student-avatar-small">${record.userAvatar || '👤'}</div>
+                                    <div>${record.userName}</div>
+                                </div>
+                                <div class="status-cell">
+                                    <span class="status-badge ${record.status}">${record.status}</span>
+                                </div>
+                                <div class="time-cell">${formatTime(record.timestamp)}</div>
+                                <div class="distance-cell">${record.inRange ? 'In range' : `${Math.round(record.distance)}m`}</div>
+                            </div>
+                        `;
+                    });
+                }
 
                 html += `
-                    <tr>
-                        <td>${date.toLocaleDateString()}</td>
-                        <td>${section.name}</td>
-                        <td>${date.toLocaleTimeString()}</td>
-                        <td>
-                            <span class="status-badge status-${record.status}">
-                                ${record.status.charAt(0).toUpperCase() + record.status.slice(1)}
-                            </span>
-                        </td>
-                        <td>${record.method || 'Auto'}</td>
-                    </tr>
+                                </div>
+                            </div>
+                            
+                            <div class="session-actions-full">
+                                <button class="button button-filled" style="width: 100%; margin-bottom: 12px;" onclick="endSession('${sessionId}'); closeModal()">
+                                    End Session
+                                </button>
+                                <button class="button button-outlined" style="width: 100%;" onclick="exportSessionAttendance('${sessionId}')">
+                                    Export Attendance
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                openModal(html);
+                document.getElementById('sheetClose').addEventListener('click', closeModal);
+            } catch (error) {
+                console.error('Error loading session details:', error);
+                showToast('Error loading session details');
+            }
+        }
+
+        // Export session attendance
+        async function exportSessionAttendance(sessionId) {
+            try {
+                const session = appState.activeSessions.find(s => s.id === sessionId);
+                if (!session) return;
+
+                const attendanceSnapshot = await db.collection('attendance')
+                    .where('sessionId', '==', sessionId)
+                    .get();
+
+                let csvContent = 'Student Name,Status,Time,Distance,Method\n';
+                attendanceSnapshot.forEach(doc => {
+                    const record = doc.data();
+                    const time = new Date(record.timestamp).toLocaleTimeString();
+                    csvContent += `"${record.userName}",${record.status},${time},${record.inRange ? 'In range' : `${Math.round(record.distance)}m`},${record.method || 'manual'}\n`;
+                });
+
+                const blob = new Blob([csvContent], {
+                    type: 'text/csv'
+                });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `${session.sectionName}-session-${new Date().toISOString().split('T')[0]}.csv`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+
+                showToast('Attendance exported successfully');
+            } catch (error) {
+                console.error('Error exporting session attendance:', error);
+                showToast('Error exporting attendance');
+            }
+        }
+
+        // Open modal
+        function openModal(content) {
+            elements.bottomSheet.innerHTML = content;
+            elements.modalBackdrop.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        // Close modal
+        function closeModal() {
+            elements.modalBackdrop.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        // Close fullscreen modal
+        function closeFullscreen() {
+            elements.fullscreenModal.style.display = 'none';
+            elements.fullscreenContent.innerHTML = '';
+        }
+
+        // Show toast notification
+        function showToast(message) {
+            elements.toastMessage.textContent = message;
+            elements.toast.classList.add('active');
+
+            setTimeout(() => {
+                elements.toast.classList.remove('active');
+            }, 3000);
+        }
+
+        // Utility functions
+        function getTimeBasedGreeting() {
+            const hour = new Date().getHours();
+            if (hour < 12) return 'Good morning';
+            if (hour < 18) return 'Good afternoon';
+            return 'Good evening';
+        }
+
+        function formatDate(dateString) {
+            const options = {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            };
+            return new Date(dateString).toLocaleDateString(undefined, options);
+        }
+
+        function formatTime(dateString) {
+            const options = {
+                hour: '2-digit',
+                minute: '2-digit'
+            };
+            return new Date(dateString).toLocaleTimeString(undefined, options);
+        }
+
+        function formatSessionDuration(startTime) {
+            const start = new Date(startTime);
+            const now = new Date();
+            const diffMs = now - start;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMins / 60);
+            const remainingMins = diffMins % 60;
+
+            if (diffHours > 0) {
+                return `${diffHours}h ${remainingMins}m`;
+            }
+            return `${diffMins}m`;
+        }
+
+        function getRandomColor() {
+            const colors = ['#6750A4', '#7D5260', '#006A6B', '#1C6E42', '#7C5800'];
+            return colors[Math.floor(Math.random() * colors.length)];
+        }
+
+        function getInitials(name) {
+            return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+        }
+
+        function calculateAge(dob) {
+            const today = new Date();
+            let age = today.getFullYear() - dob.getFullYear();
+            const monthDiff = today.getMonth() - dob.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+                age--;
+            }
+            return age;
+        }
+
+        function generateJoinCode() {
+            return Math.random().toString(36).substring(2, 8).toUpperCase();
+        }
+
+        // Load user sections from Firestore
+        async function loadUserSections() {
+            try {
+                let sectionsSnapshot;
+                if (appState.currentUser.role === 'teacher') {
+                    sectionsSnapshot = await db.collection('sections')
+                        .where('teacherId', '==', appState.currentUser.id)
+                        .get();
+                } else {
+                    sectionsSnapshot = await db.collection('sections')
+                        .where('students', 'array-contains', appState.currentUser.id)
+                        .get();
+                }
+                appState.sections = sectionsSnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+            } catch (error) {
+                console.error('Error loading sections:', error);
+            }
+        }
+
+        // Load user messages from Firestore
+        async function loadUserMessages() {
+            try {
+                const messagesSnapshot = await db.collection('messages')
+                    .where('recipients', 'array-contains', appState.currentUser.id)
+                    .orderBy('timestamp', 'desc')
+                    .limit(50)
+                    .get();
+                appState.messages = messagesSnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+            } catch (error) {
+                console.error('Error loading messages:', error);
+            }
+        }
+
+        // Load user settings from Firestore
+        async function loadUserSettings() {
+            try {
+                const userDoc = await db.collection('users').doc(appState.currentUser.id).get();
+                if (userDoc.exists && userDoc.data().settings) {
+                    appState.settings = {
+                        ...appState.settings,
+                        ...userDoc.data().settings
+                    };
+                }
+            } catch (error) {
+                console.error('Error loading settings:', error);
+            }
+        }
+
+        // Load user privacy preferences
+        async function loadUserPrivacy() {
+            try {
+                const userDoc = await db.collection('users').doc(appState.currentUser.id).get();
+                if (userDoc.exists && userDoc.data().privacy) {
+                    appState.privacy = {
+                        ...appState.privacy,
+                        ...userDoc.data().privacy
+                    };
+                }
+            } catch (error) {
+                console.error('Error loading privacy settings:', error);
+            }
+        }
+
+        // Load attendance data
+        async function loadAttendanceData() {
+            try {
+                const attendanceSnapshot = await db.collection('attendance')
+                    .where('userId', '==', appState.currentUser.id)
+                    .orderBy('timestamp', 'desc')
+                    .limit(100)
+                    .get();
+                appState.attendanceData = attendanceSnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+            } catch (error) {
+                console.error('Error loading attendance data:', error);
+            }
+        }
+
+        // Load active sessions
+        async function loadActiveSessions() {
+            try {
+                let sessionsSnapshot;
+                if (appState.currentUser.role === 'teacher') {
+                    sessionsSnapshot = await db.collection('sessions')
+                        .where('teacherId', '==', appState.currentUser.id)
+                        .where('active', '==', true)
+                        .get();
+                } else {
+                    sessionsSnapshot = await db.collection('sessions')
+                        .where('students', 'array-contains', appState.currentUser.id)
+                        .where('active', '==', true)
+                        .get();
+                }
+                appState.activeSessions = sessionsSnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+            } catch (error) {
+                console.error('Error loading active sessions:', error);
+            }
+        }
+
+        // Load plus points
+        async function loadPlusPoints() {
+            try {
+                const plusPointsSnapshot = await db.collection('plusPoints')
+                    .where('userId', '==', appState.currentUser.id)
+                    .get();
+
+                plusPointsSnapshot.forEach(doc => {
+                    const data = doc.data();
+                    appState.plusPoints[data.sectionId] = data.points || 0;
+                });
+            } catch (error) {
+                console.error('Error loading plus points:', error);
+            }
+        }
+
+        // Load section students
+        async function loadSectionStudents(sectionId) {
+            try {
+                const section = appState.sections.find(s => s.id === sectionId);
+                if (!section || !section.students || section.students.length === 0) {
+                    appState.students[sectionId] = [];
+                    return;
+                }
+
+                const studentPromises = section.students.map(studentId =>
+                    db.collection('users').doc(studentId).get()
+                );
+                const studentSnapshots = await Promise.all(studentPromises);
+
+                appState.students[sectionId] = studentSnapshots
+                    .filter(snapshot => snapshot.exists)
+                    .map(snapshot => ({
+                        id: snapshot.id,
+                        ...snapshot.data()
+                    }));
+            } catch (error) {
+                console.error('Error loading section students:', error);
+                appState.students[sectionId] = [];
+            }
+        }
+
+        // Load section attendance
+        async function loadSectionAttendance(sectionId) {
+            try {
+                const attendanceSnapshot = await db.collection('attendance')
+                    .where('sectionId', '==', sectionId)
+                    .orderBy('timestamp', 'desc')
+                    .limit(50)
+                    .get();
+
+                appState.sectionAttendance[sectionId] = attendanceSnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+            } catch (error) {
+                console.error('Error loading section attendance:', error);
+                appState.sectionAttendance[sectionId] = [];
+            }
+        }
+
+        // Load section plus points
+        async function loadSectionPlusPoints(sectionId) {
+            try {
+                const plusPointsSnapshot = await db.collection('plusPoints')
+                    .where('sectionId', '==', sectionId)
+                    .get();
+
+                plusPointsSnapshot.forEach(doc => {
+                    const data = doc.data();
+                    if (!appState.plusPoints[sectionId]) {
+                        appState.plusPoints[sectionId] = {};
+                    }
+                    appState.plusPoints[sectionId][data.userId] = data.points || 0;
+                });
+            } catch (error) {
+                console.error('Error loading section plus points:', error);
+            }
+        }
+
+        // View student details
+        async function viewStudentDetails(studentId, sectionId) {
+            const student = appState.students[sectionId]?.find(s => s.id === studentId);
+            if (!student) return;
+
+            const attendanceRate = calculateStudentAttendanceRate(studentId, sectionId);
+            const plusPoints = appState.plusPoints[sectionId]?.[studentId] || 0;
+
+            let html = `
+                <div class="sheet-header">
+                    <div class="sheet-title">Student Details</div>
+                    <button class="sheet-close" id="sheetClose" aria-label="Close">
+                        <span class="material-icons" aria-hidden="true">close</span>
+                    </button>
+                </div>
+                <div class="sheet-content">
+                    <div class="student-profile">
+                        <div class="student-avatar-large" style="background-color: ${student.color || '#6750A4'};">${student.avatar || '👤'}</div>
+                        <div class="student-name-large">${student.name}</div>
+                        ${student.pronouns ? `<div class="student-pronouns">${student.pronouns}</div>` : ''}
+                        <div class="student-email">${student.email}</div>
+                    </div>
+                    
+                    <div class="student-stats-grid">
+                        <div class="student-stat">
+                            <div class="student-stat-value">${attendanceRate}%</div>
+                            <div class="student-stat-label">Attendance</div>
+                        </div>
+                        <div class="student-stat">
+                            <div class="student-stat-value">${plusPoints}</div>
+                            <div class="student-stat-label">PlusPoints</div>
+                        </div>
+                    </div>
+                    
+                    <div class="student-actions">
+                        <button class="button button-tonal" style="width: 100%; margin-bottom: 12px;" onclick="addPlusPoints('${studentId}', '${sectionId}', 5)">
+                            <span class="material-icons" style="margin-right: 8px;">add</span>
+                            Add 5 PlusPoints
+                        </button>
+                        <button class="button button-outlined" style="width: 100%;" onclick="viewStudentAttendanceHistory('${studentId}', '${sectionId}')">
+                            <span class="material-icons" style="margin-right: 8px;">history</span>
+                            View Attendance History
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            openModal(html);
+            document.getElementById('sheetClose').addEventListener('click', closeModal);
+        }
+
+        // View student attendance history
+        async function viewStudentAttendanceHistory(studentId, sectionId) {
+            try {
+                const attendanceSnapshot = await db.collection('attendance')
+                    .where('userId', '==', studentId)
+                    .where('sectionId', '==', sectionId)
+                    .orderBy('timestamp', 'desc')
+                    .get();
+
+                const attendanceRecords = attendanceSnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+
+                let html = `
+                    <div class="sheet-header">
+                        <div class="sheet-title">Attendance History</div>
+                        <button class="sheet-close" id="sheetClose" aria-label="Close">
+                            <span class="material-icons" aria-hidden="true">close</span>
+                        </button>
+                    </div>
+                    <div class="sheet-content">
+                        <div class="history-list">
+                `;
+
+                if (attendanceRecords.length === 0) {
+                    html += `
+                        <div class="empty-state">
+                            <span class="material-icons">history</span>
+                            <div>No attendance records found</div>
+                        </div>
+                    `;
+                } else {
+                    attendanceRecords.forEach(record => {
+                        html += `
+                            <div class="history-record">
+                                <div class="record-date">${formatDate(record.timestamp)}</div>
+                                <div class="record-status ${record.status}">${record.status}</div>
+                                <div class="record-time">${formatTime(record.timestamp)}</div>
+                                <div class="record-method">${record.method || 'manual'}</div>
+                            </div>
+                        `;
+                    });
+                }
+
+                html += `
+                        </div>
+                    </div>
+                `;
+
+                closeModal();
+                setTimeout(() => {
+                    openModal(html);
+                    document.getElementById('sheetClose').addEventListener('click', closeModal);
+                }, 100);
+            } catch (error) {
+                console.error('Error loading attendance history:', error);
+                showToast('Error loading attendance history');
+            }
+        }
+
+        // View session report
+        async function viewSessionReport(sessionId) {
+            try {
+                const sessionDoc = await db.collection('sessions').doc(sessionId).get();
+                const session = sessionDoc.data();
+
+                const attendanceSnapshot = await db.collection('attendance')
+                    .where('sessionId', '==', sessionId)
+                    .get();
+
+                const attendanceRecords = attendanceSnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+
+                let html = `
+                    <div class="sheet-header">
+                        <div class="sheet-title">Session Report</div>
+                        <button class="sheet-close" id="sheetClose" aria-label="Close">
+                            <span class="material-icons" aria-hidden="true">close</span>
+                        </button>
+                    </div>
+                    <div class="sheet-content">
+                        <div class="session-report">
+                            <div class="report-header">
+                                <div class="report-title">${session.sectionName}</div>
+                                <div class="report-subtitle">${formatDate(session.startTime)} • ${formatTime(session.startTime)} - ${formatTime(session.endTime)}</div>
+                            </div>
+                            
+                            <div class="report-stats">
+                                <div class="report-stat">
+                                    <div class="report-stat-value">${attendanceRecords.filter(a => a.status === 'present').length}</div>
+                                    <div class="report-stat-label">Present</div>
+                                </div>
+                                <div class="report-stat">
+                                    <div class="report-stat-value">${attendanceRecords.filter(a => a.status === 'absent').length}</div>
+                                    <div class="report-stat-label">Absent</div>
+                                </div>
+                                <div class="report-stat">
+                                    <div class="report-stat-value">${session.radius}m</div>
+                                    <div class="report-stat-label">Radius</div>
+                                </div>
+                            </div>
+                            
+                            <div class="report-attendance">
+                                <div class="report-table">
+                                    <div class="table-header">
+                                        <div>Student</div>
+                                        <div>Status</div>
+                                        <div>Time</div>
+                                        <div>Method</div>
+                                    </div>
+                `;
+
+                if (attendanceRecords.length === 0) {
+                    html += `
+                        <div class="table-empty">
+                            No attendance records
+                        </div>
+                    `;
+                } else {
+                    attendanceRecords.forEach(record => {
+                        html += `
+                            <div class="table-row">
+                                <div class="student-cell">
+                                    <div class="student-avatar-small">${record.userAvatar || '👤'}</div>
+                                    <div>${record.userName}</div>
+                                </div>
+                                <div class="status-cell">
+                                    <span class="status-badge ${record.status}">${record.status}</span>
+                                </div>
+                                <div class="time-cell">${formatTime(record.timestamp)}</div>
+                                <div class="method-cell">${record.method || 'manual'}</div>
+                            </div>
+                        `;
+                    });
+                }
+
+                html += `
+                                </div>
+                            </div>
+                            
+                            <button class="button button-filled" style="width: 100%; margin-top: 24px;" onclick="exportSessionAttendance('${sessionId}')">
+                                <span class="material-icons" style="margin-right: 8px;">download</span>
+                                Export Report
+                            </button>
+                        </div>
+                    </div>
+                `;
+
+                openModal(html);
+                document.getElementById('sheetClose').addEventListener('click', closeModal);
+            } catch (error) {
+                console.error('Error loading session report:', error);
+                showToast('Error loading session report');
+            }
+        }
+
+        // Take manual attendance
+        async function takeManualAttendance(sectionId) {
+            const section = appState.sections.find(s => s.id === sectionId);
+            if (!section) return;
+
+            const students = appState.students[sectionId] || [];
+            const today = new Date().toISOString().split('T')[0];
+
+            let html = `
+                <div class="sheet-header">
+                    <div class="sheet-title">Manual Attendance - ${section.name}</div>
+                    <button class="sheet-close" id="sheetClose" aria-label="Close">
+                        <span class="material-icons" aria-hidden="true">close</span>
+                    </button>
+                </div>
+                <div class="sheet-content">
+                    <div class="manual-attendance">
+                        <div style="margin-bottom: 16px; color: var(--on-surface-variant);">
+                            Mark attendance for ${formatDate(today)}
+                        </div>
+                        
+                        <div class="attendance-list">
+            `;
+
+            students.forEach(student => {
+                const todayAttendance = (appState.sectionAttendance[sectionId] || []).find(a =>
+                    a.userId === student.id && a.timestamp.split('T')[0] === today
+                );
+                const currentStatus = todayAttendance?.status || 'absent';
+
+                html += `
+                    <div class="attendance-row">
+                        <div class="student-info">
+                            <div class="student-avatar-small">${student.avatar || '👤'}</div>
+                            <div>
+                                <div class="student-name">${student.name}</div>
+                                ${student.pronouns ? `<div class="student-pronouns">${student.pronouns}</div>` : ''}
+                            </div>
+                        </div>
+                        <div class="attendance-actions">
+                            <button class="button ${currentStatus === 'present' ? 'button-filled' : 'button-outlined'}" 
+                                    onclick="markManualAttendance('${student.id}', '${sectionId}', 'present', this)">
+                                Present
+                            </button>
+                            <button class="button ${currentStatus === 'absent' ? 'button-filled' : 'button-outlined'}" 
+                                    onclick="markManualAttendance('${student.id}', '${sectionId}', 'absent', this)">
+                                Absent
+                            </button>
+                            <button class="button ${currentStatus === 'late' ? 'button-filled' : 'button-outlined'}" 
+                                    onclick="markManualAttendance('${student.id}', '${sectionId}', 'late', this)">
+                                Late
+                            </button>
+                        </div>
+                    </div>
                 `;
             });
 
             html += `
-                        </tbody>
-                    </table>
+                        </div>
+                        
+                        <button class="button button-filled" style="width: 100%; margin-top: 24px;" onclick="saveManualAttendance('${sectionId}')">
+                            <span class="material-icons" style="margin-right: 8px;">save</span>
+                            Save Attendance
+                        </button>
+                    </div>
                 </div>
             `;
 
-            container.innerHTML = html;
-
-            if (summaryContainer) {
-                const presentCount = studentAttendance.filter(a => a.status === 'present').length;
-                const totalCount = studentAttendance.length;
-                const attendanceRate = totalCount ? Math.round((presentCount / totalCount) * 100) : 0;
-
-                summaryContainer.innerHTML = `
-                    <div class="dashboard-grid">
-                        <div class="card">
-                            <div class="card-header">
-                                <div class="card-title">Total Check-ins</div>
-                                <div class="card-icon primary">
-                                    <i class="fas fa-calendar-check"></i>
-                                </div>
-                            </div>
-                            <div class="card-content">${totalCount}</div>
-                            <div class="card-footer">All-time records</div>
-                        </div>
-                        
-                        <div class="card">
-                            <div class="card-header">
-                                <div class="card-title">Present</div>
-                                <div class="card-icon success">
-                                    <i class="fas fa-user-check"></i>
-                                </div>
-                            </div>
-                            <div class="card-content">${presentCount}</div>
-                            <div class="card-footer">${attendanceRate}% attendance rate</div>
-                        </div>
-                        
-                        <div class="card">
-                            <div class="card-header">
-                                <div class="card-title">Current Streak</div>
-                                <div class="card-icon warning">
-                                    <i class="fas fa-fire"></i>
-                                </div>
-                            </div>
-                            <div class="card-content">${calculateCurrentStreak(studentAttendance)}</div>
-                            <div class="card-footer">Consecutive days present</div>
-                        </div>
-                    </div>
-                `;
-            }
+            openModal(html);
+            document.getElementById('sheetClose').addEventListener('click', closeModal);
         }
 
-        function calculateCurrentStreak(attendance) {
-            const sorted = [...attendance].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
-            let streak = 0;
-            let currentDate = new Date();
-
-            const today = new Date().toDateString();
-            const todayRecord = sorted.find(a => new Date(a.timestamp).toDateString() === today);
-
-            if (todayRecord && todayRecord.status === 'present') {
-                streak = 1;
-                currentDate.setDate(currentDate.getDate() - 1);
-            } else {
-                return 0;
-            }
-
-            for (let i = 1; i <= 30; i++) {
-                const dateStr = currentDate.toDateString();
-                const dayRecord = sorted.find(a => new Date(a.timestamp).toDateString() === dateStr);
-
-                if (dayRecord && dayRecord.status === 'present') {
-                    streak++;
-                    currentDate.setDate(currentDate.getDate() - 1);
+        // Mark manual attendance
+        async function markManualAttendance(studentId, sectionId, status, button) {
+            const row = button.closest('.attendance-row');
+            const buttons = row.querySelectorAll('.button');
+            buttons.forEach(btn => {
+                if (btn === button) {
+                    btn.classList.remove('button-outlined');
+                    btn.classList.add('button-filled');
                 } else {
-                    break;
+                    btn.classList.remove('button-filled');
+                    btn.classList.add('button-outlined');
                 }
+            });
+
+            if (!appState.manualAttendance) {
+                appState.manualAttendance = {};
             }
-
-            return streak;
+            if (!appState.manualAttendance[sectionId]) {
+                appState.manualAttendance[sectionId] = {};
+            }
+            appState.manualAttendance[sectionId][studentId] = status;
         }
 
-        function loadReportsData() {
-            const reportsOverview = document.getElementById('reportsOverview');
-            const sectionReports = document.getElementById('sectionReports');
-            const studentReports = document.getElementById('studentReports');
-            const attendanceTrends = document.getElementById('attendanceTrends');
-
-            if (reportsOverview) reportsOverview.innerHTML = '<p>Reports overview will be displayed here.</p>';
-            if (sectionReports) sectionReports.innerHTML = '<p>Section reports will be displayed here.</p>';
-            if (studentReports) studentReports.innerHTML = '<p>Student reports will be displayed here.</p>';
-            if (attendanceTrends) attendanceTrends.innerHTML = '<p>Attendance trends will be displayed here.</p>';
-        }
-
-        function updateSectionsCarousel() {
-            const container = document.getElementById('sectionsCarousel');
-            if (!container) return;
-
-            const activeSections = state.sections.filter(s => s.isActive);
-
-            if (activeSections.length === 0) {
-                container.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><i class="fas fa-layer-group"></i></div><div class="empty-state-title">No sections</div><div class="empty-state-description">Create your first section to get started with attendance tracking.</div><button class="btn btn-primary" onclick="openCreateSectionModal()" style="margin-top: 16px;"><i class="fas fa-plus"></i> Create Section</button></div>';
+        // Save manual attendance
+        async function saveManualAttendance(sectionId) {
+            if (!appState.manualAttendance || !appState.manualAttendance[sectionId]) {
+                showToast('No changes to save');
                 return;
             }
 
-            container.innerHTML = activeSections.map(section => `
-                <div class="section-card">
-                    <div class="section-emoji">${section.emoji}</div>
-                    <div class="section-name">${section.name}</div>
-                    <div class="section-subject">${section.subject}</div>
-                    <div class="section-status ${SessionService.isSessionActive(section.id) ? 'status-active' : 'status-inactive'}">
-                        ${SessionService.isSessionActive(section.id) ? 'Session Active' : 'Session Inactive'} • ${section.radius}m radius
-                    </div>
-                    <div class="section-actions">
-                        <button class="btn btn-sm btn-primary" onclick="showSectionDetails('${section.id}')">
-                            <i class="fas fa-info-circle"></i>
-                        </button>
-                        <button class="btn btn-sm btn-secondary" onclick="openEditSectionModal('${section.id}')">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="btn btn-sm btn-warning" onclick="openSessionManagementModal('${section.id}')">
-                            <i class="fas fa-play"></i>
-                        </button>
-                        <button class="btn btn-sm btn-danger" onclick="openDeleteSectionModal('${section.id}')">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
+            try {
+                const today = new Date().toISOString().split('T')[0];
+                const batch = db.batch();
+
+                for (const [studentId, status] of Object.entries(appState.manualAttendance[sectionId])) {
+                    const attendanceRecord = {
+                        userId: studentId,
+                        userName: appState.students[sectionId]?.find(s => s.id === studentId)?.name || 'Unknown',
+                        userAvatar: appState.students[sectionId]?.find(s => s.id === studentId)?.avatar || '👤',
+                        sectionId: sectionId,
+                        sectionName: appState.sections.find(s => s.id === sectionId)?.name || 'Unknown Section',
+                        status: status,
+                        method: 'manual',
+                        timestamp: new Date().toISOString(),
+                        deviceId: appState.security.deviceId
+                    };
+
+                    batch.set(db.collection('attendance').doc(), attendanceRecord);
+                }
+
+                await batch.commit();
+                delete appState.manualAttendance[sectionId];
+                closeModal();
+                showToast('Attendance saved successfully');
+            } catch (error) {
+                console.error('Error saving manual attendance:', error);
+                showToast('Error saving attendance');
+            }
+        }
+
+        // Open quick announcement modal
+        function openQuickAnnouncementModal() {
+            let html = `
+                <div class="sheet-header">
+                    <div class="sheet-title">Send Announcement</div>
+                    <button class="sheet-close" id="sheetClose" aria-label="Close">
+                        <span class="material-icons" aria-hidden="true">close</span>
+                    </button>
                 </div>
-            `).join('');
-        }
+                <div class="sheet-content">
+                    <div class="form-group">
+                        <label for="announcementSection" class="form-label">Select Section</label>
+                        <select class="form-select" id="announcementSection">
+                            <option value="">Choose a section</option>
+            `;
 
-        function updateStudentSectionsCarousel() {
-            const container = document.getElementById('studentSectionsCarousel');
-            if (!container) return;
+            appState.sections.forEach(section => {
+                html += `<option value="${section.id}">${section.name}</option>`;
+            });
 
-            const enrolledSections = state.sections.filter(s =>
-                s.students && s.students.includes(state.currentUser.uid)
-            );
-
-            if (enrolledSections.length === 0) {
-                container.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><i class="fas fa-layer-group"></i></div><div class="empty-state-title">No sections</div><div class="empty-state-description">You haven\'t joined any sections yet. Ask your teacher for an invitation link.</div><button class="btn btn-primary" onclick="openJoinSectionModal()" style="margin-top: 16px;"><i class="fas fa-plus"></i> Join Section</button></div>';
-                return;
-            }
-
-            container.innerHTML = enrolledSections.map(section => `
-                <div class="section-card" onclick="openCheckinModal('${section.id}')">
-                    <div class="section-emoji">${section.emoji}</div>
-                    <div class="section-name">${section.name}</div>
-                    <div class="section-subject">${section.subject}</div>
-                    <div class="section-status ${SessionService.isSessionActive(section.id) ? 'status-active' : 'status-inactive'}">
-                        ${SessionService.isSessionActive(section.id) ? 'Session Active' : 'Session Inactive'} • ${section.radius}m radius
+            html += `
+                        </select>
                     </div>
-                    ${section.updates && section.updates.length > 0 ? 
-                        `<div class="section-update-indicator" title="Section has updates">
-                            <i class="fas fa-bell"></i>
-                        </div>` : ''}
+                    <div class="form-group">
+                        <label for="quickAnnouncement" class="form-label">Announcement</label>
+                        <textarea class="form-input" id="quickAnnouncement" placeholder="Enter your announcement..." rows="4"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="toggle">
+                            <input type="checkbox" id="quickPinAnnouncement">
+                            <span class="toggle-slider"></span>
+                            <span style="margin-left: 12px;">Pin this announcement</span>
+                        </label>
+                    </div>
+                    <button class="button button-filled" style="width: 100%;" onclick="sendQuickAnnouncement()">
+                        Send Announcement
+                    </button>
                 </div>
-            `).join('');
+            `;
+
+            openModal(html);
+            document.getElementById('sheetClose').addEventListener('click', closeModal);
         }
 
-        function updateAllSectionsCarousel() {
-            const container = document.getElementById('allSectionsCarousel');
-            const detailsContainer = document.getElementById('sectionDetails');
-
-            if (!container) return;
-
-            if (state.sections.length === 0) {
-                container.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><i class="fas fa-layer-group"></i></div><div class="empty-state-title">No sections</div><div class="empty-state-description">Create your first section to get started with attendance tracking.</div><button class="btn btn-primary" onclick="openCreateSectionModal()" style="margin-top: 16px;"><i class="fas fa-plus"></i> Create Section</button></div>';
-                if (detailsContainer) detailsContainer.innerHTML = '<p>Select a section to view details</p>';
-                return;
-            }
-
-            container.innerHTML = state.sections.map(section => `
-                <div class="section-card">
-                    <div class="section-emoji">${section.emoji}</div>
-                    <div class="section-name">${section.name}</div>
-                    <div class="section-subject">${section.subject}</div>
-                    <div class="section-status ${section.isActive ? (SessionService.isSessionActive(section.id) ? 'status-active' : 'status-warning') : 'status-inactive'}">
-                        ${section.isActive ? (SessionService.isSessionActive(section.id) ? 'Session Active' : 'Ready') : 'Inactive'} • ${section.radius}m radius
-                    </div>
-                    <div class="section-actions">
-                        <button class="btn btn-sm btn-primary" onclick="showSectionDetails('${section.id}')">
-                            <i class="fas fa-info-circle"></i>
-                        </button>
-                        <button class="btn btn-sm btn-secondary" onclick="openEditSectionModal('${section.id}')">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="btn btn-sm btn-warning" onclick="openSessionManagementModal('${section.id}')">
-                            <i class="fas fa-play"></i>
-                        </button>
-                        <button class="btn btn-sm btn-info" onclick="openSectionStudentsModal('${section.id}')">
-                            <i class="fas fa-users"></i>
-                        </button>
-                        <button class="btn btn-sm btn-success" onclick="openSectionInvitationModal('${section.id}')">
-                            <i class="fas fa-share"></i>
-                        </button>
-                        <button class="btn btn-sm btn-danger" onclick="openDeleteSectionModal('${section.id}')">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        function updateStudentEnrolledSectionsCarousel() {
-            const container = document.getElementById('studentEnrolledSectionsCarousel');
-            const detailsContainer = document.getElementById('studentSectionDetails');
-
-            if (!container) return;
-
-            const enrolledSections = state.sections.filter(s =>
-                s.students && s.students.includes(state.currentUser.uid)
-            );
-
-            if (enrolledSections.length === 0) {
-                container.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><i class="fas fa-layer-group"></i></div><div class="empty-state-title">No sections</div><div class="empty-state-description">You haven\'t joined any sections yet. Ask your teacher for an invitation link.</div><button class="btn btn-primary" onclick="openJoinSectionModal()" style="margin-top: 16px;"><i class="fas fa-plus"></i> Join Section</button></div>';
-                if (detailsContainer) detailsContainer.innerHTML = '<p>Select a section to view details</p>';
-                return;
-            }
-
-            container.innerHTML = enrolledSections.map(section => `
-                <div class="section-card" onclick="showStudentSectionDetails('${section.id}')">
-                    <div class="section-emoji">${section.emoji}</div>
-                    <div class="section-name">${section.name}</div>
-                    <div class="section-subject">${section.subject}</div>
-                    <div class="section-status ${section.isActive ? (SessionService.isSessionActive(section.id) ? 'status-active' : 'status-warning') : 'status-inactive'}">
-                        ${section.isActive ? (SessionService.isSessionActive(section.id) ? 'Session Active' : 'Ready') : 'Inactive'} • ${section.radius}m radius
-                    </div>
-                    ${section.updates && section.updates.length > 0 ? 
-                        `<div class="section-update-indicator" title="Section has updates">
-                            <i class="fas fa-bell"></i>
-                        </div>` : ''}
-                </div>
-            `).join('');
-        }
-
-        function showSectionDetails(sectionId) {
-            const section = state.sections.find(s => s.id === sectionId);
-            if (!section) return;
-
-            // Count students in this section
-            const studentCount = section.students ? section.students.length : 0;
-
-            const today = new Date().toDateString();
-            const todayAttendance = state.attendance.filter(a =>
-                a.sectionId === sectionId &&
-                new Date(a.timestamp).toDateString() === today
-            );
-
-            const presentToday = todayAttendance.filter(a => a.status === 'present').length;
-            const isSessionActive = SessionService.isSessionActive(sectionId);
-
-            const detailsContainer = document.getElementById('sectionDetails');
-            if (detailsContainer) {
-                detailsContainer.innerHTML = `
-                    <h3 style="margin-bottom: 16px;">${section.emoji} ${section.name}</h3>
-                    <p><strong>Subject:</strong> ${section.subject}</p>
-                    <p><strong>Schedule:</strong> ${section.schedule}</p>
-                    <p><strong>Session Duration:</strong> ${section.sessionDuration} minutes</p>
-                    <p><strong>Location Radius:</strong> ${section.radius} meters</p>
-                    <p><strong>Enrolled Students:</strong> ${studentCount}</p>
-                    <p><strong>Today's Attendance:</strong> ${presentToday}/${studentCount} present</p>
-                    <p><strong>Session Status:</strong> ${isSessionActive ? 'Active' : 'Inactive'}</p>
-                    <p><strong>Features:</strong> 
-                        ${section.autoCheckin ? 'Auto Check-in' : ''}
-                        ${section.onlineCheckin ? ', Online Check-in' : ''}
-                        ${section.nearIdTracking ? ', NearID+ Tracking' : ''}
-                        ${section.autoSession ? ', Auto Session' : ''}
-                    </p>
-                    <div style="margin-top: 20px;">
-                        <button class="btn btn-primary" onclick="openSessionManagementModal('${section.id}')" style="margin-right: 10px;">
-                            <i class="fas fa-play"></i>
-                            ${isSessionActive ? 'Manage Session' : 'Start Session'}
-                        </button>
-                        <button class="btn btn-secondary" onclick="openSectionStudentsModal('${section.id}')">
-                            <i class="fas fa-users"></i>
-                            View Students
-                        </button>
-                    </div>
-                `;
-            }
-        }
-
-        function showStudentSectionDetails(sectionId) {
-            const section = state.sections.find(s => s.id === sectionId);
-            if (!section) return;
-
-            const today = new Date().toDateString();
-            const todayAttendance = state.attendance.filter(a =>
-                a.sectionId === sectionId &&
-                a.studentId === state.currentUser.uid &&
-                new Date(a.timestamp).toDateString() === today
-            );
-
-            const isCheckedIn = todayAttendance.length > 0 && todayAttendance[0].status === 'present';
-            const isSessionActive = SessionService.isSessionActive(sectionId);
-
-            // Count students in this section
-            const studentCount = section.students ? section.students.length : 0;
-
-            const detailsContainer = document.getElementById('studentSectionDetails');
-            if (detailsContainer) {
-                detailsContainer.innerHTML = `
-                    <h3 style="margin-bottom: 16px;">${section.emoji} ${section.name}</h3>
-                    <p><strong>Subject:</strong> ${section.subject}</p>
-                    <p><strong>Schedule:</strong> ${section.schedule}</p>
-                    <p><strong>Session Duration:</strong> ${section.sessionDuration} minutes</p>
-                    <p><strong>Location Radius:</strong> ${section.radius} meters</p>
-                    <p><strong>Teacher:</strong> ${section.teacherName || 'Unknown'}</p>
-                    <p><strong>Total Students:</strong> ${studentCount}</p>
-                    <p><strong>Session Status:</strong> ${isSessionActive ? 'Active' : 'Inactive'}</p>
-                    <p><strong>Today's Status:</strong> ${isCheckedIn ? 'Present' : 'Not Checked In'}</p>
-                    <p><strong>Available Check-in Methods:</strong> 
-                        ${section.autoCheckin ? 'Auto' : ''}
-                        ${section.onlineCheckin ? ', Online' : ''}
-                        ${', Location-based'}
-                        ${', Bluetooth'}
-                    </p>
-                    ${section.updates && section.updates.length > 0 ? 
-                        `<div style="background: var(--warning-light); padding: 10px; border-radius: 8px; margin-top: 15px;">
-                            <h4>Section Updates</h4>
-                            <ul>
-                                ${section.updates.map(update => `<li>${update}</li>`).join('')}
-                            </ul>
-                        </div>` : ''}
-                    <div style="margin-top: 20px;">
-                        <button class="btn btn-primary" onclick="openCheckinModal('${section.id}')" ${!isSessionActive || isCheckedIn ? 'disabled' : ''}>
-                            <i class="fas fa-check-circle"></i>
-                            ${!isSessionActive ? 'Session Not Active' : (isCheckedIn ? 'Already Checked In' : 'Check In Now')}
-                        </button>
-                    </div>
-                `;
-            }
-        }
-
-        // Section Management
-        function viewSectionAnalytics(sectionId) {
-            showToast('info', 'Analytics', 'Section analytics will be displayed in a future update');
-        }
-
-        function joinSection() {
-            const sectionIdInput = document.getElementById('joinSectionId');
-            if (!sectionIdInput) return;
-
-            const sectionId = sectionIdInput.value;
+        // Send quick announcement
+        async function sendQuickAnnouncement() {
+            const sectionId = document.getElementById('announcementSection').value;
+            const content = document.getElementById('quickAnnouncement').value.trim();
+            const pin = document.getElementById('quickPinAnnouncement').checked;
 
             if (!sectionId) {
-                showToast('error', 'Validation Error', 'Please enter a section ID');
+                showToast('Please select a section');
                 return;
             }
 
-            db.collection('sections').doc(sectionId).get()
-                .then(doc => {
-                    if (!doc.exists) {
-                        throw new Error('Section not found');
-                    }
+            if (!content) {
+                showToast('Please enter announcement content');
+                return;
+            }
 
-                    const section = doc.data();
+            const section = appState.sections.find(s => s.id === sectionId);
+            if (!section) {
+                showToast('Section not found');
+                return;
+            }
 
-                    if (section.students && section.students.includes(state.currentUser.uid)) {
-                        throw new Error('You are already enrolled in this section');
-                    }
-
-                    const updatedStudents = section.students ? [...section.students, state.currentUser.uid] : [state.currentUser.uid];
-
-                    return db.collection('sections').doc(sectionId).update({
-                        students: updatedStudents
-                    });
-                })
-                .then(() => {
-                    // Record join date for student
-                    return db.collection('users').doc(state.currentUser.uid).update({
-                        joinedAt: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                })
-                .then(() => {
-                    showToast('success', 'Section Joined', 'You have successfully joined the section');
-                    closeAllModals();
-                    loadSections();
-
-                    sectionIdInput.value = '';
-                })
-                .catch(error => {
-                    showToast('error', 'Join Failed', error.message);
-                });
-        }
-
-        // Initialize Application
-        function init() {
             try {
-                setupEventListeners();
-                initAuth();
+                const announcement = {
+                    type: 'announcement',
+                    content: sanitizeInput(content),
+                    sender: appState.currentUser.name,
+                    senderAvatar: appState.nearId.profileEmoji,
+                    sectionId: sectionId,
+                    sectionName: section.name,
+                    recipients: section.students || [],
+                    timestamp: new Date().toISOString(),
+                    pinned: pin,
+                    read: [],
+                    reactions: {}
+                };
 
-                const urlParams = new URLSearchParams(window.location.search);
-                const teacherId = urlParams.get('teacher');
-                const sectionId = urlParams.get('section');
-
-                if (teacherId || sectionId) {
-                    localStorage.setItem('nearcheck_invitation', JSON.stringify({
-                        teacherId: teacherId,
-                        sectionId: sectionId
-                    }));
-                }
-
-                LocationService.getCurrentLocation().catch(error => {
-                    console.log('Location not available:', error.message);
-                });
-
-                console.log('NearCheck+ initialized successfully');
+                await db.collection('messages').add(announcement);
+                closeModal();
+                showToast('Announcement sent successfully');
             } catch (error) {
-                console.error('Error initializing application:', error);
-                showToast('error', 'Initialization Error', 'Failed to initialize application');
+                console.error('Error sending announcement:', error);
+                showToast('Error sending announcement');
             }
         }
 
-        // Make functions available globally for onclick handlers
-        window.openCheckinModal = openCheckinModal;
-        window.showSectionDetails = showSectionDetails;
-        window.showStudentSectionDetails = showStudentSectionDetails;
-        window.viewSectionAnalytics = viewSectionAnalytics;
-        window.openCreateSectionModal = openCreateSectionModal;
-        window.openEditSectionModal = openEditSectionModal;
-        window.openDeleteSectionModal = openDeleteSectionModal;
-        window.openSectionStudentsModal = openSectionStudentsModal;
-        window.openSectionInvitationModal = openSectionInvitationModal;
-        window.openSessionManagementModal = openSessionManagementModal;
-        window.openJoinSectionModal = openJoinSectionModal;
-        window.openBLECheckinModal = openBLECheckinModal;
-        window.openManualCheckinOptionsModal = openManualCheckinOptionsModal;
-        window.switchPage = switchPage;
-        window.cancelAutoCheckin = cancelAutoCheckin;
-        window.removeStudentFromSection = removeStudentFromSection;
-        window.processOnlineCheckin = processOnlineCheckin;
-        window.updateAttendanceStatus = updateAttendanceStatus;
-        window.processLocationCheckin = processLocationCheckin;
-        window.processBluetoothCheckin = processBluetoothCheckin;
-        window.processBothCheckin = processBothCheckin;
+        // Open start session modal
+        function openStartSessionModal() {
+            let html = `
+                <div class="sheet-header">
+                    <div class="sheet-title">Start New Session</div>
+                    <button class="sheet-close" id="sheetClose" aria-label="Close">
+                        <span class="material-icons" aria-hidden="true">close</span>
+                    </button>
+                </div>
+                <div class="sheet-content">
+                    <div class="form-group">
+                        <label for="sessionSection" class="form-label">Select Section</label>
+                        <select class="form-select" id="sessionSection">
+                            <option value="">Choose a section</option>
+            `;
 
-        // Start the application
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', init);
-        } else {
-            init();
+            appState.sections.forEach(section => {
+                if (!section.active) {
+                    html += `<option value="${section.id}">${section.name}</option>`;
+                }
+            });
+
+            html += `
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="sessionRadius" class="form-label">Session Radius (meters)</label>
+                        <input type="range" class="form-input" id="sessionRadius" min="5" max="100" value="${appState.settings.defaultRadius}" oninput="document.getElementById('sessionRadiusValue').textContent = this.value + ' meters'">
+                        <div style="text-align: center; margin-top: 8px;" id="sessionRadiusValue">${appState.settings.defaultRadius} meters</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="toggle">
+                            <input type="checkbox" id="sessionAutoCheckIn" checked>
+                            <span class="toggle-slider"></span>
+                            <span style="margin-left: 12px;">Enable Auto Check-In</span>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label class="toggle">
+                            <input type="checkbox" id="sessionRemoteCheckIn">
+                            <span class="toggle-slider"></span>
+                            <span style="margin-left: 12px;">Allow Remote Check-In</span>
+                        </label>
+                    </div>
+                    <button class="button button-filled" style="width: 100%;" onclick="startNewSession()">
+                        <span class="material-icons" style="margin-right: 8px;">play_circle</span>
+                        Start Session
+                    </button>
+                </div>
+            `;
+
+            openModal(html);
+            document.getElementById('sheetClose').addEventListener('click', closeModal);
         }
+
+        // Start new session
+        async function startNewSession() {
+            const sectionId = document.getElementById('sessionSection').value;
+            const radius = parseInt(document.getElementById('sessionRadius').value);
+            const autoCheckIn = document.getElementById('sessionAutoCheckIn').checked;
+            const remoteCheckIn = document.getElementById('sessionRemoteCheckIn').checked;
+
+            if (!sectionId) {
+                showToast('Please select a section');
+                return;
+            }
+
+            const section = appState.sections.find(s => s.id === sectionId);
+            if (!section) {
+                showToast('Section not found');
+                return;
+            }
+
+            try {
+                const position = await getCurrentPosition();
+
+                const newSession = {
+                    sectionId: sectionId,
+                    sectionName: section.name,
+                    teacherId: appState.currentUser.id,
+                    students: section.students || [],
+                    location: {
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude
+                    },
+                    radius: radius,
+                    autoCheckIn: autoCheckIn,
+                    remoteCheckIn: remoteCheckIn,
+                    active: true,
+                    startTime: new Date().toISOString(),
+                    checkedInCount: 0
+                };
+
+                await db.collection('sessions').add(newSession);
+
+                await db.collection('sections').doc(sectionId).update({
+                    active: true,
+                    currentSession: newSession.id
+                });
+
+                closeModal();
+                showToast(`Session started for ${section.name}`);
+                loadPage('sessions');
+            } catch (error) {
+                console.error('Error starting session:', error);
+                showToast('Error starting session');
+            }
+        }
+
+        // Open student management
+        function openStudentManagement() {
+            let html = `
+                <div class="sheet-header">
+                    <div class="sheet-title">Student Management</div>
+                    <button class="sheet-close" id="sheetClose" aria-label="Close">
+                        <span class="material-icons" aria-hidden="true">close</span>
+                    </button>
+                </div>
+                <div class="sheet-content">
+                    <div class="tabs">
+                        <div class="tab active" data-tab="all">All Sections</div>
+                        <div class="tab" data-tab="search">Search Students</div>
+                    </div>
+                    
+                    <div class="tab-content active" id="allTab">
+                        <div class="sections-list">
+            `;
+
+            if (appState.sections.length === 0) {
+                html += `
+                    <div class="empty-state">
+                        <span class="material-icons">class</span>
+                        <div>No sections available</div>
+                    </div>
+                `;
+            } else {
+                appState.sections.forEach(section => {
+                    const studentCount = section.students ? section.students.length : 0;
+
+                    html += `
+                        <div class="section-item" onclick="openSectionStudentManagement('${section.id}')">
+                            <div class="section-emoji">${section.emoji}</div>
+                            <div class="section-info">
+                                <div class="section-name">${section.name}</div>
+                                <div class="section-subtitle">${section.subject} • ${studentCount} students</div>
+                            </div>
+                            <div class="section-arrow">
+                                <span class="material-icons">chevron_right</span>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+
+            html += `
+                        </div>
+                    </div>
+                    
+                    <div class="tab-content" id="searchTab">
+                        <div class="form-group">
+                            <input type="text" class="form-input" id="searchStudentInput" placeholder="Search by name or email...">
+                        </div>
+                        <div id="searchResultsContainer" style="margin-top: 16px;">
+                            <div class="empty-state">
+                                <span class="material-icons">search</span>
+                                <div>Search for students across all sections</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            openModal(html);
+            document.getElementById('sheetClose').addEventListener('click', closeModal);
+
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    const tabName = tab.getAttribute('data-tab');
+                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                    tab.classList.add('active');
+                    document.getElementById(tabName + 'Tab').classList.add('active');
+                });
+            });
+
+            const searchInput = document.getElementById('searchStudentInput');
+            if (searchInput) {
+                searchInput.addEventListener('input', searchStudentsAcrossSections);
+            }
+        }
+
+        // Search students across sections
+        async function searchStudentsAcrossSections(e) {
+            const query = e.target.value.toLowerCase().trim();
+            const resultsContainer = document.getElementById('searchResultsContainer');
+
+            if (!query) {
+                resultsContainer.innerHTML = `
+                    <div class="empty-state">
+                        <span class="material-icons">search</span>
+                        <div>Search for students across all sections</div>
+                    </div>
+                `;
+                return;
+            }
+
+            const results = [];
+
+            for (const section of appState.sections) {
+                const students = appState.students[section.id] || [];
+                const filteredStudents = students.filter(student =>
+                    student.name.toLowerCase().includes(query) ||
+                    (student.email && student.email.toLowerCase().includes(query))
+                );
+
+                filteredStudents.forEach(student => {
+                    results.push({
+                        student,
+                        section
+                    });
+                });
+            }
+
+            if (results.length === 0) {
+                resultsContainer.innerHTML = `
+                    <div class="empty-state">
+                        <span class="material-icons">search_off</span>
+                        <div>No students found matching "${query}"</div>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '<div class="search-results-list">';
+            results.forEach(({student, section}) => {
+                html += `
+                    <div class="search-result-item">
+                        <div class="student-avatar-small">${student.avatar || '👤'}</div>
+                        <div class="search-result-info">
+                            <div class="search-result-name">${student.name}</div>
+                            <div class="search-result-details">
+                                <span>${student.email || 'No email'}</span>
+                                <span>•</span>
+                                <span>${section.name}</span>
+                            </div>
+                        </div>
+                        <div class="search-result-actions">
+                            <button class="button button-text" onclick="viewStudentDetails('${student.id}', '${section.id}')">
+                                View
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+
+            resultsContainer.innerHTML = html;
+        }
+
+        // Open section student management
+        function openSectionStudentManagement(sectionId) {
+            const section = appState.sections.find(s => s.id === sectionId);
+            if (!section) return;
+
+            const students = appState.students[sectionId] || [];
+
+            let html = `
+                <div class="sheet-header">
+                    <div class="sheet-title">${section.name} - Students</div>
+                    <button class="back-button" id="backToManagement" aria-label="Back">
+                        <span class="material-icons" aria-hidden="true">arrow_back</span>
+                    </button>
+                </div>
+                <div class="sheet-content">
+                    <div class="student-management">
+                        <div class="management-header">
+                            <div class="student-count">${students.length} Students</div>
+                            <button class="button button-filled" onclick="openAddStudentsModal('${sectionId}')">
+                                <span class="material-icons">person_add</span>
+                                Add Students
+                            </button>
+                        </div>
+                        
+                        <div class="student-list">
+            `;
+
+            if (students.length === 0) {
+                html += `
+                    <div class="empty-state">
+                        <span class="material-icons">group</span>
+                        <div>No students in this section</div>
+                    </div>
+                `;
+            } else {
+                students.forEach(student => {
+                    const attendanceRate = calculateStudentAttendanceRate(student.id, sectionId);
+
+                    html += `
+                        <div class="management-student-item">
+                            <div class="student-info">
+                                <div class="student-avatar-small">${student.avatar || '👤'}</div>
+                                <div>
+                                    <div class="student-name">${student.name}</div>
+                                    <div class="student-stats">
+                                        <span>${attendanceRate}% attendance</span>
+                                        ${student.email ? `<span>•</span><span>${student.email}</span>` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="student-actions">
+                                <button class="button button-text" onclick="removeStudentFromSection('${student.id}', '${sectionId}')">
+                                    Remove
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+
+            html += `
+                        </div>
+                        
+                        <div class="management-actions">
+                            <button class="button button-outlined" style="width: 100%; margin-bottom: 12px;" onclick="exportStudentList('${sectionId}')">
+                                <span class="material-icons" style="margin-right: 8px;">download</span>
+                                Export Student List
+                            </button>
+                            <button class="button button-text" style="width: 100%; color: var(--error);" onclick="removeAllStudents('${sectionId}')">
+                                <span class="material-icons" style="margin-right: 8px;">delete</span>
+                                Remove All Students
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            elements.bottomSheet.innerHTML = html;
+            document.getElementById('backToManagement').addEventListener('click', openStudentManagement);
+        }
+
+        // Remove student from section
+        async function removeStudentFromSection(studentId, sectionId) {
+            if (!confirm('Remove this student from the section?')) {
+                return;
+            }
+
+            try {
+                await db.collection('sections').doc(sectionId).update({
+                    students: firebase.firestore.FieldValue.arrayRemove(studentId)
+                });
+
+                showToast('Student removed from section');
+                openSectionStudentManagement(sectionId);
+            } catch (error) {
+                console.error('Error removing student:', error);
+                showToast('Error removing student');
+            }
+        }
+
+        // Remove all students from section
+        async function removeAllStudents(sectionId) {
+            if (!confirm('Remove ALL students from this section? This action cannot be undone.')) {
+                return;
+            }
+
+            try {
+                const section = appState.sections.find(s => s.id === sectionId);
+                if (!section) return;
+
+                await db.collection('sections').doc(sectionId).update({
+                    students: []
+                });
+
+                showToast('All students removed from section');
+                openSectionStudentManagement(sectionId);
+            } catch (error) {
+                console.error('Error removing all students:', error);
+                showToast('Error removing students');
+            }
+        }
+
+        // Export student list
+        async function exportStudentList(sectionId) {
+            try {
+                const section = appState.sections.find(s => s.id === sectionId);
+                if (!section) return;
+
+                const students = appState.students[sectionId] || [];
+
+                let csvContent = 'Name,Email,Attendance Rate,Join Date\n';
+                students.forEach(student => {
+                    const attendanceRate = calculateStudentAttendanceRate(student.id, sectionId);
+                    csvContent += `"${student.name}","${student.email || ''}",${attendanceRate}%,"${student.joinDate || ''}"\n`;
+                });
+
+                const blob = new Blob([csvContent], {
+                    type: 'text/csv'
+                });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `${section.name}-students-${new Date().toISOString().split('T')[0]}.csv`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+
+                showToast('Student list exported successfully');
+            } catch (error) {
+                console.error('Error exporting student list:', error);
+                showToast('Error exporting student list');
+            }
+        }
+
+        // Initialize the app when DOM is loaded
+        document.addEventListener('DOMContentLoaded', initApp);
