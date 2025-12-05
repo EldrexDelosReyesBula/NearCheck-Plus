@@ -23,3 +23,7 @@ Thumbs.db
 
 # Other
 coverage/
+
+# Local config file (do NOT commit)
+config.js
+config.local.js
