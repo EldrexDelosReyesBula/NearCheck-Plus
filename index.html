@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    
+    <!-- Security Headers -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; 
+        script-src 'self' https://www.gstatic.com https://www.googletagmanager.com https://cdn.jsdelivr.net https://unpkg.com; 
+        style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; 
+        img-src 'self' data: https: blob:; 
+        font-src 'self' https://fonts.gstatic.com data:; 
+        connect-src 'self' https://; 
+        frame-ancestors 'none'; 
+        base-uri 'self'; 
+        form-action 'self';">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="X-Frame-Options" content="DENY">
+    <meta http-equiv="X-XSS-Protection" content="1; mode=block">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <meta name="theme-color" content="#1976d2">
+    
+    <title>NearCheck+ | Attendance. Smarter than ever.</title>
+    
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <link rel="stylesheet" href="main.css">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75'>📍</text></svg>">
+</head>
+<body>
+    <!-- WATT Compliance Banner -->
+    <div class="tracking-consent" id="trackingConsent" style="display: none;">
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+            <div>
+                <h3 style="margin-bottom: 8px;">We Value Your Privacy</h3>
+                <p>NearCheck+ uses essential cookies and location services to provide attendance tracking. We never store your raw location data and respect your privacy choices.</p>
+            </div>
+            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                <button class="button button-filled" id="acceptTracking">Accept Essential Only</button>
+                <button class="button button-tonal" id="acceptAllTracking">Accept All</button>
+                <button class="button button-text" id="rejectTracking">Reject Non-Essential</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Landing Screen -->
+    <div id="landingContainer" class="landing-container">
+        <div class="landing-hero">
+            <div class="landing-logo">NearCheck+</div>
+            <div class="landing-subtitle">Attendance. Smarter than ever.</div>
+        </div>
+
+        <!-- Bottom Sheet for Auth Options -->
+        <div class="bottom-sheet landing-sheet" id="landingSheet">
+            <div class="sheet-content">
+                <h3 style="text-align: center; margin-bottom: 16px;">Get Started with NearCheck+</h3>
+                <p style="text-align: center; color: var(--on-surface-variant); margin-bottom: 24px; font-size: 14px;">
+                    Privacy-first attendance system for modern classrooms
+                </p>
+                <button class="button button-filled" style="width: 100%; margin-bottom: 12px;" id="showSignIn">
+                    Sign In to Your Account
+                </button>
+                <button class="button button-outlined" style="width: 100%;" id="showSignUp">
+                    Create New Account
+                </button>
+                <div style="text-align: center; margin-top: 16px; color: var(--on-surface-variant); font-size: 14px;">
+                    By continuing, you agree to our Terms and Privacy Policy
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Authentication Screens -->
+    <div id="authContainer" class="auth-container" style="display: none;">
+        <div class="auth-card">
+            <button class="back-button" id="authBackButton" aria-label="Back to landing">
+                <span class="material-icons" aria-hidden="true">arrow_back</span>
+            </button>
+
+            <div class="auth-title">NearCheck+</div>
+            <div class="auth-subtitle">Attendance. Smarter than ever.</div>
+
+            <!-- Login Form -->
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="loginEmail" class="form-label">Email</label>
+                    <input type="email" class="form-input" id="loginEmail" required aria-required="true" autocomplete="email">
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword" class="form-label">Password</label>
+                    <input type="password" class="form-input" id="loginPassword" required aria-required="true" autocomplete="current-password">
+                    <button type="button" id="togglePassword" class="button button-text" style="margin-top: 8px; font-size: 12px;" aria-label="Show password">
+                        Show Password
+                    </button>
+                </div>
+                <div class="form-group">
+                    <label class="toggle">
+                        <input type="checkbox" id="rememberMe">
+                        <span class="toggle-slider"></span>
+                        <span style="margin-left: 12px;">Remember me</span>
+                    </label>
+                </div>
+                <button type="submit" class="button button-filled" style="width: 100%;">Sign In</button>
+                <div style="text-align: center; margin-top: 16px;">
+                    <a href="#" id="forgotPassword" style="font-size: 14px; color: var(--primary);">Forgot password?</a>
+                </div>
+            </form>
+
+            <!-- Sign Up Form -->
+            <form id="signupForm" style="display: none;">
+                <div class="form-group">
+                    <label for="signupName" class="form-label">Full Name</label>
+                    <input type="text" class="form-input" id="signupName" required aria-required="true" autocomplete="name">
+                </div>
+                <div class="form-group">
+                    <label for="signupPronouns" class="form-label">Pronouns (Optional)</label>
+                    <input type="text" class="form-input" id="signupPronouns" placeholder="e.g., they/them, he/him, she/her">
+                </div>
+                <div class="form-group">
+                    <label for="signupEmail" class="form-label">Email</label>
+                    <input type="email" class="form-input" id="signupEmail" required aria-required="true" autocomplete="email">
+                </div>
+                <div class="form-group">
+                    <label for="signupPassword" class="form-label">Password</label>
+                    <input type="password" class="form-input" id="signupPassword" required aria-required="true" minlength="6" autocomplete="new-password">
+                    <div style="font-size: 12px; color: var(--on-surface-variant); margin-top: 4px;">
+                        Must be at least 6 characters
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="signupConfirmPassword" class="form-label">Confirm Password</label>
+                    <input type="password" class="form-input" id="signupConfirmPassword" required aria-required="true" autocomplete="new-password">
+                </div>
+                <div class="form-group">
+                    <label for="signupRole" class="form-label">Role</label>
+                    <select class="form-select" id="signupRole" required aria-required="true">
+                        <option value="">Select Role</option>
+                        <option value="teacher">Teacher</option>
+                        <option value="student">Student</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="signupDob" class="form-label">Date of Birth</label>
+                    <input type="date" class="form-input" id="signupDob" required aria-required="true">
+                </div>
+                <div class="form-group">
+                    <label class="toggle">
+                        <input type="checkbox" id="termsAgreement" required aria-required="true">
+                        <span class="toggle-slider"></span>
+                        <span style="margin-left: 12px;">I agree to the <a href="#" id="termsLink">Terms of Service</a> and <a href="#" id="privacyLink">Privacy Policy</a></span>
+                    </label>
+                </div>
+                <button type="submit" class="button button-filled" style="width: 100%;">Create Account</button>
+            </form>
+
+            <div class="auth-footer">
+                <span id="authToggleText">Don't have an account?</span>
+                <a href="#" class="auth-link" id="authToggle">Sign Up</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Password Reset Screen -->
+    <div id="resetContainer" class="auth-container" style="display: none;">
+        <div class="auth-card">
+            <button class="back-button" id="resetBackButton" aria-label="Back to login">
+                <span class="material-icons" aria-hidden="true">arrow_back</span>
+            </button>
+
+            <div class="auth-title">Reset Password</div>
+            <div class="auth-subtitle">Enter your email to reset your password</div>
+
+            <form id="resetForm">
+                <div class="form-group">
+                    <label for="resetEmail" class="form-label">Email</label>
+                    <input type="email" class="form-input" id="resetEmail" required aria-required="true" autocomplete="email">
+                </div>
+                <div class="form-group">
+                    <label for="resetCode" class="form-label">Verification Code (Sent to your email)</label>
+                    <input type="text" class="form-input" id="resetCode" pattern="[0-9]{6}" maxlength="6">
+                </div>
+                <div class="form-group">
+                    <label for="newPassword" class="form-label">New Password</label>
+                    <input type="password" class="form-input" id="newPassword" minlength="6" autocomplete="new-password">
+                </div>
+                <div class="form-group">
+                    <label for="confirmNewPassword" class="form-label">Confirm New Password</label>
+                    <input type="password" class="form-input" id="confirmNewPassword" minlength="6" autocomplete="new-password">
+                </div>
+                <button type="submit" class="button button-filled" style="width: 100%;" id="resetSubmitButton">Send Reset Email</button>
+                <div style="text-align: center; margin-top: 16px;">
+                    <a href="#" id="backToLogin" style="font-size: 14px; color: var(--primary);">Back to Login</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Loading Screen -->
+    <div id="loadingContainer" class="loading-container" style="display: none;">
+        <div class="loading-spinner" aria-label="Loading"></div>
+        <div>Loading NearCheck+...</div>
+    </div>
+
+    <!-- Main App -->
+    <div class="app-container" id="appContainer" style="display: none;">
+        <div class="top-app-bar" id="topAppBar">
+            <button class="nav-icon" id="menuButton" aria-label="Menu">
+                <span class="material-icons" aria-hidden="true">menu</span>
+            </button>
+            <div class="app-title">NearCheck+</div>
+            <div class="spacer"></div>
+            <button class="nav-icon" id="searchButton" aria-label="Search">
+                <span class="material-icons" aria-hidden="true">search</span>
+            </button>
+            <button class="nav-icon" id="notificationsButton" aria-label="Notifications">
+                <span class="material-icons" aria-hidden="true">notifications</span>
+                <span class="notification-badge" id="notificationBadge" style="display: none;"></span>
+            </button>
+            <button class="nav-icon" id="profileButton" aria-label="Profile">
+                <span class="material-icons" aria-hidden="true">account_circle</span>
+            </button>
+        </div>
+
+        <main class="main-content" id="mainContent" tabindex="-1">
+            <!-- Content will be dynamically loaded here -->
+        </main>
+
+        <nav class="navigation-bar" id="navigationBar" aria-label="Main navigation">
+            <button class="nav-item active" data-page="dashboard" aria-label="Dashboard">
+                <div class="nav-icon-container">
+                    <span class="material-icons" aria-hidden="true">dashboard</span>
+                </div>
+                <div class="nav-label">Dashboard</div>
+            </button>
+            <button class="nav-item" data-page="sections" aria-label="Sections">
+                <div class="nav-icon-container">
+                    <span class="material-icons" aria-hidden="true">class</span>
+                </div>
+                <div class="nav-label">Sections</div>
+            </button>
+            <button class="nav-item teacher-only" data-page="sessions" aria-label="Sessions" style="display: none;">
+                <div class="nav-icon-container">
+                    <span class="material-icons" aria-hidden="true">location_on</span>
+                </div>
+                <div class="nav-label">Sessions</div>
+            </button>
+            <button class="nav-item" data-page="messages" aria-label="Messages">
+                <div class="nav-icon-container">
+                    <span class="material-icons" aria-hidden="true">chat</span>
+                </div>
+                <div class="nav-label">Messages</div>
+            </button>
+            <button class="nav-item" data-page="settings" aria-label="Settings">
+                <div class="nav-icon-container">
+                    <span class="material-icons" aria-hidden="true">settings</span>
+                </div>
+                <div class="nav-label">Settings</div>
+            </button>
+        </nav>
+
+        <button class="fab" id="fabButton" aria-label="Add new">
+            <span class="material-icons" aria-hidden="true">add</span>
+        </button>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast" id="toast" role="alert" aria-live="polite">
+        <div class="toast-icon">
+            <span class="material-icons" aria-hidden="true">check_circle</span>
+        </div>
+        <div class="toast-message" id="toastMessage">Action completed successfully</div>
+    </div>
+
+    <!-- Bottom Sheet Modals -->
+    <div class="modal-backdrop" id="modalBackdrop">
+        <div class="bottom-sheet" id="bottomSheet">
+            <!-- Bottom sheet content will be dynamically loaded here -->
+        </div>
+    </div>
+
+    <!-- Fullscreen Modals -->
+    <div class="fullscreen-modal" id="fullscreenModal" style="display: none;">
+        <div class="fullscreen-header">
+            <button class="back-button" id="fullscreenBackButton" aria-label="Back">
+                <span class="material-icons" aria-hidden="true">arrow_back</span>
+            </button>
+            <div class="fullscreen-title" id="fullscreenTitle"></div>
+            <button class="sheet-close" id="fullscreenClose" aria-label="Close">
+                <span class="material-icons" aria-hidden="true">close</span>
+            </button>
+        </div>
+        <div class="fullscreen-content" id="fullscreenContent"></div>
+    </div>
+
+    <!-- Session Timeout Warning -->
+    <div class="modal-backdrop" id="sessionTimeoutModal" style="display: none; align-items: center; justify-content: center;">
+        <div class="card" style="max-width: 400px; text-align: center;">
+            <div class="card-header">
+                <span class="material-icons" style="color: var(--warning); font-size: 48px; margin-bottom: 16px;">timer</span>
+                <div class="card-title">Session About to Expire</div>
+            </div>
+            <p style="margin-bottom: 24px;">Your session will expire in <span id="sessionCountdown">5:00</span> due to inactivity.</p>
+            <button class="button button-filled" style="width: 100%;" id="extendSession">Extend Session</button>
+        </div>
+    </div>
+
+    <!-- OpenStreetMaps Integration -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js" defer></script>
+
+    <!-- QR Code Library -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js" defer></script>
+
+    <!-- Firebase (Required for authentication) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js" defer></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js" defer></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js" defer></script>
+
+    <script src="config-loader.js" defer></script>
+    <script src="security.js" defer></script>
+    <script src="voice-commands.js" defer></script>
+    <script src="main.js" defer></script>
+</body>
+</html>
